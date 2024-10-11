@@ -35,9 +35,9 @@ func NewTask(name string, arguments map[string]any, options ...TaskOption) Task 
 		CreateDate:  now,
 		StartDate:   now,
 		TimeoutDate: 0,
-		Priority:    16,
+		Priority:    -1, // If unset, this will be overridden by the Queue object
+		RetryMax:    -1, // If unset, this will be overridden by the Queue object
 		RetryCount:  0,
-		RetryMax:    12, // With exponential backoff, 2^12 minutes = 4096 minutes ~= 68 hours
 	}
 
 	// Apply functional options

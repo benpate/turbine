@@ -8,13 +8,15 @@ import (
 )
 
 type Queue struct {
-	storage     Storage       // Storage is the interface to the database
-	consumers   []Consumer    // consumers contains all registered Consumer objects
-	workerCount int           // workerCount represents the number of goroutines to use for processing Tasks concurrently. Default process count is 16
-	bufferSize  int           // bufferSize determines the number of Tasks to lock in one transaction. Default buffer size is 32
-	pollStorage bool          // pollStorage determines if the queue should poll the database for new tasks. Default is true
-	buffer      chan Task     // buffer is a channel of tasks that are ready to be processed
-	done        chan struct{} // Done channel is called to stop the queue
+	storage         Storage       // Storage is the interface to the database
+	consumers       []Consumer    // consumers contains all registered Consumer objects
+	workerCount     int           // workerCount represents the number of goroutines to use for processing Tasks concurrently. Default process count is 16
+	bufferSize      int           // bufferSize determines the number of Tasks to lock in one transaction. Default buffer size is 32
+	pollStorage     bool          // pollStorage determines if the queue should poll the database for new tasks. Default is true
+	defaultPriority int           // defaultPriority is the default priority to use when creating new tasks
+	defaultRetryMax int           // defaultRetryMax is the default number of times to retry a task before giving up
+	buffer          chan Task     // buffer is a channel of tasks that are ready to be processed
+	done            chan struct{} // Done channel is called to stop the queue
 }
 
 // New returns a fully initialized Queue object, with all options applied
@@ -22,9 +24,11 @@ func New(options ...QueueOption) Queue {
 
 	// Create the new Queue object
 	result := Queue{
-		workerCount: 16,
-		bufferSize:  32,
-		pollStorage: true,
+		workerCount:     16,
+		bufferSize:      32,
+		defaultPriority: 16,
+		defaultRetryMax: 8, // 511 minutes => ~8.5 hours of retries
+		pollStorage:     true,
 	}
 
 	// Apply options
@@ -92,8 +96,18 @@ func (q *Queue) start() {
 	}
 }
 
-// RunTask
+// PublishTask adds a Task to the Queue
 func (q *Queue) Publish(task Task) error {
+
+	// RULE: Update task.Priority if unset
+	if task.Priority == -1 {
+		task.Priority = q.defaultPriority
+	}
+
+	// RULE: Update task.RetryMax if unset
+	if task.RetryMax == -1 {
+		task.RetryMax = q.defaultRetryMax
+	}
 
 	// Special Case #1: If there is no storage provider,
 	// then queue the Task in the memory buffer.  This *may*
@@ -116,7 +130,7 @@ func (q *Queue) Publish(task Task) error {
 		}
 	}
 
-	// Otherwise, write the Task to the Storage provider
+	// Default Case: Write the Task to the Storage provider
 	if err := q.storage.SaveTask(task); err != nil {
 		return derp.Wrap(err, "queue.Push", "Error saving task to database")
 	}

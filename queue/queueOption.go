@@ -36,3 +36,17 @@ func WithPollStorage(pollStorage bool) QueueOption {
 		q.pollStorage = pollStorage
 	}
 }
+
+// WithDefaultPriority sets the default priority for new tasks
+func WithDefaultPriority(defaultPriority int) QueueOption {
+	return func(q *Queue) {
+		q.defaultPriority = defaultPriority
+	}
+}
+
+// WithDefaultRetryMax sets the default number of times to retry a task before giving up
+func WithDefaultRetryMax(defaultRetryMax int) QueueOption {
+	return func(q *Queue) {
+		q.defaultRetryMax = defaultRetryMax
+	}
+}
