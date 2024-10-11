@@ -29,6 +29,7 @@ func New(options ...QueueOption) Queue {
 		defaultPriority: 16,
 		defaultRetryMax: 8, // 511 minutes => ~8.5 hours of retries
 		pollStorage:     true,
+		done:            make(chan struct{}),
 	}
 
 	// Apply options

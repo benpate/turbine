@@ -18,3 +18,9 @@ func TestQueue(t *testing.T) {
 		require.Nil(t, q.Publish(NewTask("", nil)))
 	}
 }
+
+func TestStop(t *testing.T) {
+
+	q := New()
+	q.Stop()
+}
