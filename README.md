@@ -1,5 +1,8 @@
 # Turbine
 
+<img src="https://github.com/benpate/turbine/raw/main/meta/banner.webp" style="width:100%; display:block; margin-bottom:20px;"  alt="Oil painting titled: Dutch landscape with windmills, by Gerard Delfgaauw (1882-1947)">
+
+
 [![GoDoc](https://img.shields.io/badge/go-documentation-blue.svg?style=flat-square)](http://pkg.go.dev/github.com/benpate/turbine)
 [![Version](https://img.shields.io/github/v/release/benpate/turbine?include_prereleases&style=flat-square&color=brightgreen)](https://github.com/benpate/turbine/releases)
 [![Build Status](https://img.shields.io/github/actions/workflow/status/benpate/turbine/go.yml?style=flat-square)](https://github.com/benpate/turbine/actions/workflows/go.yml)
