@@ -45,13 +45,31 @@ if err := queue.Publish(task); err != nil {
 // Create and start a queue
 q := queue.New(
     queue.WithConsumers(), // one or more "consumer" functions (below)
-    queue.WithStorage(), // optional storage adapter persists tasks 
-    queue.WithTimeout()
+    queue.WithStorage(),   // optional storage adapter persists tasks 
+    queue.WithTimeout(),   // other configs, like timeouts, retries, etc
 )
 ```
 
-
 ## Consuming Tasks from the Queue
 
+When the turbine queue receives a task, it tries to execute it using one or more `Consumer`
+functions, which have the following signature:
+
+```go
+func Consumer(name string, args map[string]any) (bool, error)
+```
+
+It is the consumer's job to identify the task by name, and decide if it can 
+execute it or not.  You can configure any number of consumer functions, so if 
+a task is not recognized, it is passed to the next consumer until a match is found.
+
+If the consumer DOES recognize the Task, then it executes the job and returns TRUE,
+along with an error result (or nil if the task was successful).
+
+When a task return an error, it is re-queued according to Turbine's exponential backoff logic, and will be re-run at some point in the future.
 
 ## Mongo Storage Provider
+
+Turbine is built to support pluggable storage providers, so that any datastore can be used to manage queued tasks.
+
+Currently, there is a single storage provider for Mongodb, which safely queues and dequeues tasks for any number of distributed queue workers.
