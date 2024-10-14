@@ -48,7 +48,7 @@ func (q *Queue) consume(task Task) error {
 			}
 
 			// Report the error but do not return it because we have re-queued the task to try again
-			// derp.Report(derp.Wrap(runError, location, "Error executing task"))
+			derp.Report(derp.Wrap(runError, location, "Error executing task"))
 			return nil
 		}
 

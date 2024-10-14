@@ -18,7 +18,7 @@ type Task struct {
 	Priority    int       `bson:"priority"`    // Priority of the handler, determines the order that tasks are executed in.
 	RetryCount  int       `bson:"retryCount"`  // Number of times that this task has already been retried
 	RetryMax    int       `bson:"retryMax"`    // Maximum number of times that this task can be retried
-	Error       error     `bson:"error"`       // Error (if any) from the last execution
+	Error       string    `bson:"error"`       // Error (if any) from the last execution
 }
 
 // NewTask uses a Task object to create a new Task record

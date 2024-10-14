@@ -43,7 +43,7 @@ func (q *Queue) onTaskError(task Task, err error) error {
 	task.StartDate = time.Now().Add(backoff(task.RetryCount)).Unix()
 	task.TimeoutDate = 0
 	task.RetryCount++
-	task.Error = err
+	task.Error = derp.Message(err)
 
 	// If there is no storage provider, then use the buffer to queue the task
 	if q.storage == nil {
@@ -61,12 +61,12 @@ func (q *Queue) onTaskFailure(task Task, err error) error {
 	const location = "queue.onTaskFailure"
 
 	// Add the error into the Task record
-	task.Error = err
+	task.Error = derp.Message(err)
 
 	// If there is no storage provider, then there's not much we can do...
 	// Just report the error and return
 	if q.storage == nil {
-		derp.Report(task.Error)
+		derp.Report(err)
 		return nil
 	}
 
