@@ -72,4 +72,24 @@ When a task return an error, it is re-queued according to Turbine's exponential 
 
 Turbine is built to support pluggable storage providers, so that any datastore can be used to manage queued tasks.
 
-Currently, there is a single storage provider for Mongodb, which safely queues and dequeues tasks for any number of distributed queue workers.
+Currently, there is a single storage provider for Mongodb, which safely queues and dequeues tasks for any number of distributed queue workers.  However, [storage providers implement a simple interface](https://pkg.go.dev/github.com/benpate/turbine@v0.1.0/queue#Storage), so it is simple to create a new storage provider for any back end that you want to use.  
+
+**IMPORTANT**: If you do not use a storage provider, the Turbine queue will still work, but will only work in memory.  This means that items cannot be queued for future dates, and will not have a retry delay.
+
+To initialize the storage provider, use the following code:
+
+```go
+import (
+    "github.com/benpate/turbine/queue"
+    "github.com/benpate/turbine/queue_mongo"
+)
+
+// Create a MongoDB database connection
+connection := mongo.Connect(...) 
+
+// Pass the DB connection into the storage provider
+provider := queue_mongo.New(connection)
+
+// Initialize the queue with the storage provider
+q := queue.New(queue.WithStorage(provider))
+```
