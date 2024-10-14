@@ -21,6 +21,7 @@ type Storage struct {
 
 // New returns a fully initialized Storage object
 func New(database *mongo.Database, lockQuantity int, timeoutMinutes int) Storage {
+
 	return Storage{
 		database:       database,
 		lockQuantity:   lockQuantity,
@@ -70,6 +71,12 @@ func (storage Storage) SaveTask(task queue.Task) error {
 func (storage Storage) DeleteTask(taskID string) error {
 
 	const location = "queue.deleteTask"
+
+	// If the taskID is empty, then this is an in-memory task, so there's nothing to do
+	if taskID == "" {
+		return nil
+	}
+
 	timeout, cancel := timeoutContext(16)
 	defer cancel()
 
@@ -96,9 +103,6 @@ func (storage Storage) LogFailure(task queue.Task) error {
 	const location = "queue.logTask"
 	timeout, cancel := timeoutContext(16)
 	defer cancel()
-
-	// Report the error (probably to the console)
-	derp.Report(task.Error)
 
 	// Add the task to the log
 	if _, err := storage.database.Collection(CollectionLog).InsertOne(timeout, task); err != nil {
@@ -131,7 +135,10 @@ func (storage Storage) GetTasks() ([]queue.Task, error) {
 	}
 
 	// Sort by startDate, and limit to the number of workers
-	options := options.Find().SetSort(bson.M{"startDate": 1})
+	options := options.Find().SetSort(bson.D{
+		{Key: "startDate", Value: 1},
+		{Key: "priority", Value: 1},
+	})
 
 	// Query the database
 	cursor, err := storage.database.Collection(CollectionQueue).Find(timeout, filter, options)
@@ -161,7 +168,7 @@ func (storage Storage) lockTasks(timeout context.Context, lockID primitive.Objec
 
 	// Try to update these tasks IF they available to take
 	filter := bson.M{
-		"_id":         tasks,
+		"_id":         bson.M{"$in": tasks},
 		"timeoutDate": bson.M{"$lt": time.Now().Unix()},
 	}
 
