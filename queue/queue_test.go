@@ -8,8 +8,8 @@ import (
 
 func TestQueue(t *testing.T) {
 
-	consumer := func(name string, args map[string]any) (bool, error) {
-		return true, nil
+	consumer := func(name string, args map[string]any) Result {
+		return Success()
 	}
 
 	q := New(WithConsumers(consumer))

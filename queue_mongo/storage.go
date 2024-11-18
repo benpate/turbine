@@ -6,6 +6,7 @@ import (
 
 	"github.com/benpate/derp"
 	"github.com/benpate/turbine/queue"
+	"github.com/rs/zerolog/log"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -32,14 +33,17 @@ func New(database *mongo.Database, lockQuantity int, timeoutMinutes int) Storage
 // SaveTask adds/updates a task to the queue
 func (storage Storage) SaveTask(task queue.Task) error {
 
-	const location = "queue.saveTask"
-	timeout, cancel := timeoutContext(16)
-	defer cancel()
+	const location = "queue_mongo.SaveTask"
 
 	var taskID primitive.ObjectID
 	var err error
 
-	// If the Task does not have a TaskID, then create a new one
+	log.Trace().
+		Str("location", location).
+		Str("task", task.Name).
+		Msg("Saving Task...")
+
+		// If the Task does not have a TaskID, then create a new one
 	if task.TaskID == "" {
 		taskID = primitive.NewObjectID()
 		task.TaskID = taskID.Hex()
@@ -59,9 +63,17 @@ func (storage Storage) SaveTask(task queue.Task) error {
 	update := bson.M{"$set": task}
 
 	// Update the database
+	timeout, cancel := timeoutContext(16)
+	defer cancel()
+
 	if _, err := storage.database.Collection(CollectionQueue).UpdateOne(timeout, filter, update, options); err != nil {
 		return derp.Wrap(err, location, "Unable to save task to task queue")
 	}
+
+	log.Trace().
+		Str("location", location).
+		Str("task", task.Name).
+		Msg("Task saved.")
 
 	// Silence is golden
 	return nil
@@ -70,15 +82,17 @@ func (storage Storage) SaveTask(task queue.Task) error {
 // DeleteTask removes a task from the queue
 func (storage Storage) DeleteTask(taskID string) error {
 
-	const location = "queue.deleteTask"
+	const location = "queue_mongo.DeleteTask"
+
+	log.Trace().
+		Str("location", location).
+		Str("taskId", taskID).
+		Msg("Deleting task from queue...")
 
 	// If the taskID is empty, then this is an in-memory task, so there's nothing to do
 	if taskID == "" {
 		return nil
 	}
-
-	timeout, cancel := timeoutContext(16)
-	defer cancel()
 
 	// Convert the taskID into a primitive.ObjectID
 	objectID, err := primitive.ObjectIDFromHex(taskID)
@@ -88,26 +102,44 @@ func (storage Storage) DeleteTask(taskID string) error {
 	}
 
 	// Remove the task from the task queue
+	timeout, cancel := timeoutContext(16)
+	defer cancel()
+
 	filter := bson.M{"_id": objectID}
 	if _, err := storage.database.Collection(CollectionQueue).DeleteOne(timeout, filter); err != nil {
 		return derp.Wrap(err, location, "Unable to delete task from task queue")
 	}
 
 	// Silence is acquiescence
+	log.Trace().
+		Str("location", location).
+		Str("taskId", taskID).
+		Msg("Task deleted.")
+
 	return nil
 }
 
 // LogFailure adds a task to the error log
 func (storage Storage) LogFailure(task queue.Task) error {
 
-	const location = "queue.logTask"
+	const location = "queue_mongo.LogFailure"
 	timeout, cancel := timeoutContext(16)
 	defer cancel()
+
+	log.Trace().
+		Str("location", location).Str("database", storage.database.Name()).
+		Str("task", task.Name).
+		Msg("Adding task to failure log...")
 
 	// Add the task to the log
 	if _, err := storage.database.Collection(CollectionLog).InsertOne(timeout, task); err != nil {
 		return derp.Wrap(err, location, "Unable to add task to error log")
 	}
+
+	log.Trace().Str("location", location).
+		Str("database", storage.database.Name()).
+		Str("task", task.Name).
+		Msg("Failure log saved.")
 
 	return nil
 }
@@ -115,7 +147,7 @@ func (storage Storage) LogFailure(task queue.Task) error {
 // GetTasks returns all tasks that are currently locked by this worker
 func (storage Storage) GetTasks() ([]queue.Task, error) {
 
-	const location = "mongo.Storage.queryTasks"
+	const location = "queue_mongo.GetTasks"
 
 	// Create a timeout context for 16 seconds
 	timeout, cancel := timeoutContext(16)
@@ -157,7 +189,7 @@ func (storage Storage) GetTasks() ([]queue.Task, error) {
 // lockTasks assigns a set of tasks to the current worker
 func (storage Storage) lockTasks(timeout context.Context, lockID primitive.ObjectID) error {
 
-	const location = "mongo.Storage.lockTasks"
+	const location = "queue_mongo.lockTasks"
 
 	// Identify the next set of tasks that COULD be run by this worker
 	tasks, err := storage.pickTasks(timeout)
@@ -193,6 +225,8 @@ func (storage Storage) lockTasks(timeout context.Context, lockID primitive.Objec
 // pickTasks identifies the next set of tasks that should be assigned to workers.
 func (storage Storage) pickTasks(timeout context.Context) ([]primitive.ObjectID, error) {
 
+	const location = "queue_mongo.pickTasks"
+
 	// Look for unassigned tasks, or tasks that have timed out
 	filter := bson.M{
 		"timeoutDate": bson.M{"$lt": time.Now().Unix()},
@@ -210,7 +244,7 @@ func (storage Storage) pickTasks(timeout context.Context) ([]primitive.ObjectID,
 	cursor, err := storage.database.Collection(CollectionQueue).Find(timeout, filter, options)
 
 	if err != nil {
-		return nil, derp.Wrap(err, "mongo.Storage.lockTasks", "Error finding tasks")
+		return nil, derp.Wrap(err, location, "Error finding tasks")
 	}
 
 	// Decode the response into a slice
@@ -219,7 +253,7 @@ func (storage Storage) pickTasks(timeout context.Context) ([]primitive.ObjectID,
 	}, 0)
 
 	if err := cursor.All(timeout, &temp); err != nil {
-		return nil, derp.Wrap(err, "mongo.Storage.lockTasks", "Error decoding tasks")
+		return nil, derp.Wrap(err, location, "Error decoding tasks")
 	}
 
 	// Extract the ObjectIDs from the slice

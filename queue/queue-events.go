@@ -4,12 +4,15 @@ import (
 	"time"
 
 	"github.com/benpate/derp"
+	"github.com/rs/zerolog/log"
 )
 
 // onTaskSucceeded marks a task as completed, and removes it from the queue.
 func (q *Queue) onTaskSucceeded(task Task) error {
 
 	const location = "queue.onTaskSucceeded"
+
+	log.Trace().Str("location", location).Str("name", task.Name).Msg("Loggin task success")
 
 	// If there is no storage provider, then there's no stored record to remove.
 	if q.storage == nil {
@@ -32,6 +35,9 @@ func (q *Queue) onTaskSucceeded(task Task) error {
 // to the error log and removed from the queue.
 func (q *Queue) onTaskError(task Task, err error) error {
 
+	const location = "queue.onTaskError"
+	log.Trace().Str("name", task.Name).Str("location", location).Msg("Logging task error")
+
 	// If the task has already been (re)tried too many times, then give up
 	// and move it to the error log
 	if task.RetryCount >= task.RetryMax {
@@ -47,6 +53,7 @@ func (q *Queue) onTaskError(task Task, err error) error {
 
 	// If there is no storage provider, then use the buffer to queue the task
 	if q.storage == nil {
+		log.Trace().Str("location", location).Msg("Storage is nil.  Unable to log error.")
 		q.buffer <- task
 		return nil
 	}
@@ -59,6 +66,7 @@ func (q *Queue) onTaskError(task Task, err error) error {
 func (q *Queue) onTaskFailure(task Task, err error) error {
 
 	const location = "queue.onTaskFailure"
+	log.Trace().Str("location", location).Str("name", task.Name).Msg("Logging task failure...")
 
 	// Add the error into the Task record
 	task.Error = derp.Message(err)
@@ -66,6 +74,7 @@ func (q *Queue) onTaskFailure(task Task, err error) error {
 	// If there is no storage provider, then there's not much we can do...
 	// Just report the error and return
 	if q.storage == nil {
+		log.Trace().Str("location", location).Msg("Storage is nil.  Unable to log failure.")
 		derp.Report(err)
 		return nil
 	}

@@ -3,6 +3,7 @@ package queue
 import (
 	"github.com/benpate/derp"
 	"github.com/benpate/rosetta/channel"
+	"github.com/rs/zerolog/log"
 )
 
 // startWorker runs a single worker process, pulling Tasks off
@@ -27,38 +28,59 @@ func (q *Queue) startWorker() {
 // consume executes a single Task
 func (q *Queue) consume(task Task) error {
 
-	const location = "queue.processOne"
+	const location = "queue.consume"
 
 	for _, consumeFunc := range q.consumers {
 
 		// Try to run the Task
-		matchFound, runError := consumeFunc(task.Name, task.Arguments)
+		result := consumeFunc(task.Name, task.Arguments)
 
-		// If this consumer cannot match this task, then try the next consumer
-		if !matchFound {
-			continue
-		}
+		log.Trace().Str("location", location).Str("name", task.Name).Str("status", result.Status).Msg("Task executed")
+		derp.Report(result.Error)
 
-		// If there was an error running the consumer, then re-queue (or fail) the Task
-		if runError != nil {
+		switch result.Status {
 
-			// If the Task fails, then try to re-queue or handle the error
-			if writeError := q.onTaskError(task, runError); writeError != nil {
-				return derp.Wrap(writeError, location, "Error setting task error", runError)
+		// If the task was successful, then mark it as complete
+		case ResultStatusSuccess:
+
+			log.Trace().Str("location", location).Msg("Task succeeded...")
+			if err := q.onTaskSucceeded(task); err != nil {
+				return derp.Wrap(err, location, "Error setting task success")
 			}
 
-			// Report the error but do not return it because we have re-queued the task to try again
-			derp.Report(derp.Wrap(runError, location, "Error executing task"))
+			// UwU :: Return nil == success
 			return nil
-		}
 
-		// Otherwise, the Task was successful.  Remove it from the Storage provider
-		if runError := q.onTaskSucceeded(task); runError != nil {
-			return derp.Wrap(runError, location, "Error setting task success")
-		}
+		// If the Task fails but can be retried, then try to re-queue for another attempt
+		case ResultStatusError:
 
-		// UwU :: Return nil == success
-		return nil
+			log.Trace().Str("location", location).Msg("Task error...")
+
+			if err := q.onTaskError(task, result.Error); err != nil {
+				return derp.Wrap(err, location, "Error setting task error", result.Error)
+			}
+
+			// "successfully" failed, but can be retried
+			return nil
+
+		// If the Task fails and should not be retried, then mark it as failed
+		case ResultStatusFailure:
+
+			log.Trace().Str("location", location).Msg("Task failure...")
+
+			if err := q.onTaskFailure(task, result.Error); err != nil {
+				return derp.Wrap(err, location, "Error setting task failure", result.Error)
+			}
+
+			// Task failed successfully
+			return nil
+
+		// Unrecognised statuses are the same as "Ignored".
+		// If the consumer cannot match this task, then try the next consumer
+		// case ResultStatusIgnored:
+		default:
+			continue
+		}
 	}
 
 	// No matching consumers found. Return disgrace.

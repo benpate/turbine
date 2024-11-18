@@ -44,6 +44,13 @@ func WithDefaultPriority(defaultPriority int) QueueOption {
 	}
 }
 
+// WithRunImmediatePriority sets the maximum priority level for tasks that will run immediately
+func WithRunImmediatePriority(runImmediatePriority int) QueueOption {
+	return func(q *Queue) {
+		q.runImmediatePriority = runImmediatePriority
+	}
+}
+
 // WithDefaultRetryMax sets the default number of times to retry a task before giving up
 func WithDefaultRetryMax(defaultRetryMax int) QueueOption {
 	return func(q *Queue) {

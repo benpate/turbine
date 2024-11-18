@@ -122,6 +122,7 @@ func (q *Queue) Publish(task Task) error {
 	// hold up execution if the buffer is full because there's
 	// no storage provider to fall back on.
 	if q.storage == nil {
+		log.Trace().Msg("Turbine Queue: No storage configured. Task added to channel.")
 		q.buffer <- task
 		return nil
 	}
@@ -132,9 +133,11 @@ func (q *Queue) Publish(task Task) error {
 	if task.Priority <= q.runImmediatePriority {
 		select {
 		case q.buffer <- task:
+			log.Trace().Msg("Turbine Queue: Channel available. Task added to channel")
 			return nil
 		default:
 			// If the buffer is full, then fall through and write the Task to the Storage provider
+			log.Trace().Msg("Turbine Queue: Channel full. Writing task to storage...")
 		}
 	}
 
@@ -144,6 +147,7 @@ func (q *Queue) Publish(task Task) error {
 	}
 
 	// Success! (probably)
+	log.Trace().Msg("Turbine Queue: Task queued successfully")
 	return nil
 }
 
