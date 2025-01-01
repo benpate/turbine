@@ -12,7 +12,7 @@ func (q *Queue) onTaskSucceeded(task Task) error {
 
 	const location = "queue.onTaskSucceeded"
 
-	log.Trace().Str("location", location).Str("name", task.Name).Msg("Loggin task success")
+	log.Trace().Str("location", location).Str("name", task.Name).Msg("Task success")
 
 	// If there is no storage provider, then there's no stored record to remove.
 	if q.storage == nil {
