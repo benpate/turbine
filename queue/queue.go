@@ -130,8 +130,9 @@ func (q *Queue) Publish(task Task) error {
 	// Special Case #2: If the task is marked for immedicate execution, then try to
 	// put it directly into the in-memory buffer.  If the current buffer is full, then
 	// write it to disk
-	if task.Priority <= q.runImmediatePriority {
+	if q.allowImmediate(&task) {
 		select {
+
 		case q.buffer <- task:
 			log.Trace().Msg("Turbine Queue: Channel available. Task added to channel")
 			return nil
@@ -173,4 +174,16 @@ func (q *Queue) Schedule(task Task, delay time.Duration) error {
 // Stop closes the queue and stops all workers (after they complete their current task)
 func (queue *Queue) Stop() {
 	close(queue.done)
+}
+
+// allowImmediate returns TRUE if the Task can be executed immediately
+func (queue *Queue) allowImmediate(task *Task) bool {
+
+	// If the task has a signature, then it CANNOT be executed immediately
+	if task.Signature != "" {
+		return false
+	}
+
+	// Otherwise, tasks can execute immediately if their priority is less than or equal to the runImmediatePriority
+	return task.Priority <= queue.runImmediatePriority
 }

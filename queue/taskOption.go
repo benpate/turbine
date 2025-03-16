@@ -12,6 +12,8 @@ func WithPriority(priority int) TaskOption {
 }
 
 // WithDelaySeconds sets the number of seconds before the task is executed
+// relative to the current clock. This differs from WithStartTime, which
+// sets an absolute start time.
 func WithDelaySeconds(delaySeconds int) TaskOption {
 	return func(task *Task) {
 		task.Delay(time.Duration(delaySeconds) * time.Second)
@@ -19,6 +21,8 @@ func WithDelaySeconds(delaySeconds int) TaskOption {
 }
 
 // WithDelayMinutes sets the number of minutes before the task is executed
+// relative to the current clock. This differs from WithStartTime, which
+// sets an absolute start time.
 func WithDelayMinutes(delayMinutes int) TaskOption {
 	return func(task *Task) {
 		task.Delay(time.Duration(delayMinutes) * time.Minute)
@@ -26,6 +30,8 @@ func WithDelayMinutes(delayMinutes int) TaskOption {
 }
 
 // WithDelayHours sets the number of hours before the task is executed
+// relative to the current clock. This differs from WithStartTime, which
+// sets an absolute start time.
 func WithDelayHours(delayHours int) TaskOption {
 	return func(task *Task) {
 		task.Delay(time.Duration(delayHours) * time.Hour)
@@ -36,6 +42,15 @@ func WithDelayHours(delayHours int) TaskOption {
 func WithRetryMax(retryMax int) TaskOption {
 	return func(t *Task) {
 		t.RetryMax = retryMax
+	}
+}
+
+// WithSignature sets the signature of the task.
+// Only one task with a given signature can be active at a time.
+// Duplicates are dropped silently.
+func WithSignature(signature string) TaskOption {
+	return func(t *Task) {
+		t.Signature = signature
 	}
 }
 

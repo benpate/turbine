@@ -38,6 +38,21 @@ func (storage Storage) SaveTask(task queue.Task) error {
 	var taskID primitive.ObjectID
 	var err error
 
+	// Create a timeout context for 16 seconds
+	timeout, cancel := timeoutContext(16)
+	defer cancel()
+
+	// Check for duplicate signatures.
+	if storage.isDuplicateSignature(timeout, task.Signature) {
+
+		log.Trace().
+			Str("task", task.Name).
+			Str("signature", task.Signature).
+			Msg("Turbine Queue: Discarding duplicate task signature")
+
+		return nil
+	}
+
 	log.Trace().
 		Str("location", location).
 		Str("task", task.Name).
@@ -59,13 +74,9 @@ func (storage Storage) SaveTask(task queue.Task) error {
 	// Set up filter and option arguments
 	filter := bson.M{"_id": taskID}
 	options := options.Update().SetUpsert(true)
-
 	update := bson.M{"$set": task}
 
 	// Update the database
-	timeout, cancel := timeoutContext(16)
-	defer cancel()
-
 	if _, err := storage.database.Collection(CollectionQueue).UpdateOne(timeout, filter, update, options); err != nil {
 		return derp.Wrap(err, location, "Unable to save task to task queue")
 	}
@@ -227,9 +238,12 @@ func (storage Storage) pickTasks(timeout context.Context) ([]primitive.ObjectID,
 
 	const location = "queue_mongo.pickTasks"
 
+	startDate := time.Now().Unix()
+
 	// Look for unassigned tasks, or tasks that have timed out
 	filter := bson.M{
-		"timeoutDate": bson.M{"$lt": time.Now().Unix()},
+		"startDate":   bson.M{"$lte": startDate},
+		"timeoutDate": bson.M{"$lt": startDate},
 	}
 
 	// Sort by startDate, and limit to the number of workers
@@ -263,4 +277,34 @@ func (storage Storage) pickTasks(timeout context.Context) ([]primitive.ObjectID,
 	}
 
 	return result, nil
+}
+
+// isDuplicateSignature returns TRUE if the task
+// has a signature that is already in the queue
+func (storage Storage) isDuplicateSignature(timeout context.Context, signature string) bool {
+
+	if signature == "" {
+		return false
+	}
+
+	var task queue.Task
+
+	// Look for unassigned tasks, or tasks that have timed out
+	filter := bson.M{"signature": signature}
+	options := options.FindOne().SetProjection(bson.M{"_id": 1})
+
+	// Query the database for matching Tasks
+	query := storage.database.Collection(CollectionQueue).FindOne(timeout, filter, options)
+
+	// If we can't retrieve a duplicate, then there isn't one.
+	if err := query.Decode(&task); err == nil {
+		return true
+	} else {
+
+		if err != mongo.ErrNoDocuments {
+			derp.Report(derp.Wrap(err, "queue_mongo.isDuplicateSignature", "Error finding duplicate signature"))
+		}
+
+		return false
+	}
 }
