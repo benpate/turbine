@@ -38,3 +38,12 @@ func WithRetryMax(retryMax int) TaskOption {
 		t.RetryMax = retryMax
 	}
 }
+
+// WithStartTime sets the absolute start time of the task
+// This differs from WithDelayXXX options, which set a start time
+// relative to the current clock.
+func WithStartTime(timestamp time.Time) TaskOption {
+	return func(t *Task) {
+		t.StartDate = timestamp.Unix()
+	}
+}
