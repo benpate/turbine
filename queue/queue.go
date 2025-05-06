@@ -157,7 +157,7 @@ func (q *Queue) Schedule(task Task, delay time.Duration) error {
 	const location = "queue.Schedule"
 
 	if q.storage == nil {
-		return derp.NewInternalError(location, "Must have a storage provider in order to schedule tasks")
+		return derp.InternalError(location, "Must have a storage provider in order to schedule tasks")
 	}
 
 	// Create a Journal record to save to the Storage provider
