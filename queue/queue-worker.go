@@ -43,7 +43,7 @@ func (q *Queue) consume(task Task) error {
 		// If the task was successful, then mark it as complete
 		case ResultStatusSuccess:
 
-			log.Trace().Str("location", location).Msg("Task succeeded...")
+			log.Trace().Str("location", location).Msg("Task succeeded.")
 			if err := q.onTaskSucceeded(task); err != nil {
 				return derp.Wrap(err, location, "Error setting task success")
 			}

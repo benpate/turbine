@@ -42,14 +42,8 @@ func (storage Storage) SaveTask(task queue.Task) error {
 	timeout, cancel := timeoutContext(16)
 	defer cancel()
 
-	// Check for duplicate signatures.
+	// If this is a duplicate task, then do not run it again.
 	if storage.isDuplicateSignature(timeout, task.Signature) {
-
-		log.Trace().
-			Str("task", task.Name).
-			Str("signature", task.Signature).
-			Msg("Turbine Queue: Discarding duplicate task signature")
-
 		return nil
 	}
 

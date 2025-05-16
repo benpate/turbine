@@ -148,7 +148,6 @@ func (q *Queue) Publish(task Task) error {
 	}
 
 	// Success! (probably)
-	log.Trace().Msg("Turbine Queue: Task queued successfully")
 	return nil
 }
 
