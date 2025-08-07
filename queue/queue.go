@@ -19,6 +19,7 @@ type Queue struct {
 	defaultRetryMax      int           // defaultRetryMax is the default number of times to retry a task before giving up
 	buffer               chan Task     // buffer is a channel of tasks that are ready to be processed
 	done                 chan struct{} // Done channel is called to stop the queue
+	Enqueue              chan Task     // Channel for publishing tasks to the queue
 }
 
 // New returns a fully initialized Queue object, with all options applied
@@ -50,6 +51,8 @@ func New(options ...QueueOption) Queue {
 
 	// Poll the storage container for new Tasks
 	go result.start()
+
+	go result.enqueue()
 
 	// UwU LOL.
 	return result
@@ -100,6 +103,22 @@ func (q *Queue) start() {
 			}
 
 			q.buffer <- task
+		}
+	}
+}
+
+func (q *Queue) enqueue() {
+
+	// If we don't have a storage object, then we won't enqueue tasks
+	if q.storage == nil {
+		return
+	}
+
+	// Listen for new tasks to enqueue
+	for task := range q.Enqueue {
+
+		if err := q.Publish(task); err != nil {
+			derp.Report(err)
 		}
 	}
 }
