@@ -34,6 +34,7 @@ func New(options ...QueueOption) Queue {
 		defaultRetryMax:      8, // 511 minutes => ~8.5 hours of retries
 		pollStorage:          true,
 		done:                 make(chan struct{}),
+		Enqueue:              make(chan Task, 16), // Default buffer size for the Enqueue channel
 	}
 
 	// Apply options
@@ -109,16 +110,13 @@ func (q *Queue) start() {
 
 func (q *Queue) enqueue() {
 
-	// If we don't have a storage object, then we won't enqueue tasks
-	if q.storage == nil {
-		return
-	}
+	for {
+		select {
 
-	// Listen for new tasks to enqueue
-	for task := range q.Enqueue {
-
-		if err := q.Publish(task); err != nil {
-			derp.Report(err)
+		case <-q.done:
+			return
+		case task := <-q.Enqueue:
+			go derp.Report(q.Publish(task))
 		}
 	}
 }
