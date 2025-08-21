@@ -10,7 +10,7 @@ import (
 // the buffered channel and running them one at a time.
 func (q *Queue) startWorker() {
 
-	// Pull Tasks off of the buffereed channel
+	// Pull Tasks off of the buffered channel
 	for task := range q.buffer {
 
 		// Execute the Task

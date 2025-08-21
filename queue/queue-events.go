@@ -49,7 +49,7 @@ func (q *Queue) onTaskError(task Task, err error) error {
 	task.StartDate = time.Now().Add(backoff(task.RetryCount)).Unix()
 	task.TimeoutDate = 0
 	task.RetryCount++
-	task.Error = derp.Message(err)
+	task.Error = derp.Serialize(err)
 
 	// If there is no storage provider, then use the buffer to queue the task
 	if q.storage == nil {
