@@ -9,7 +9,6 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/benpate/turbine?style=flat-square)](https://goreportcard.com/report/github.com/benpate/turbine)
 [![Codecov](https://img.shields.io/codecov/c/github/benpate/turbine.svg?style=flat-square)](https://codecov.io/gh/benpate/turbine)
 
-
 ## Fast, distributed message queue for Golang and MongoDB
 
 There are many, many message queue tools. Perhaps you should use one of those instead.  But Turbine fills a unique niche in that it:
@@ -19,7 +18,6 @@ There are many, many message queue tools. Perhaps you should use one of those in
 6. supports fast, in-memory queues using Golang channels
 4. can retry failed jobs (with exponential backoff)
 5. can schedule jobs to in the future
-
 
 ## Pushing Tasks to the Queue
 
