@@ -242,7 +242,7 @@ func (storage Storage) pickTasks(timeout context.Context) ([]primitive.ObjectID,
 
 	// Sort by startDate, and limit to the number of workers
 	options := options.Find().
-		SetSort(bson.D{{Key: "priority", Value: -1}, {Key: "startDate", Value: 1}}).
+		SetSort(bson.D{{Key: "priority", Value: 1}, {Key: "startDate", Value: 1}}).
 		SetLimit(int64(storage.lockQuantity)).
 		SetProjection(bson.M{
 			"_id": 1,
