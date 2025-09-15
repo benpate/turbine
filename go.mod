@@ -6,7 +6,7 @@ toolchain go1.23.1
 
 require (
 	github.com/benpate/derp v0.32.8
-	github.com/benpate/rosetta v0.25.15
+	github.com/benpate/rosetta v0.25.16
 	github.com/rs/zerolog v1.34.0
 	github.com/stretchr/testify v1.11.1
 	go.mongodb.org/mongo-driver v1.17.4
