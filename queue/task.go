@@ -9,7 +9,7 @@ import (
 // Task wraps a Task with the metadata required to track its runs and retries.
 type Task struct {
 	TaskID      string    `bson:"taskId"`              // Unique identfier for this task
-	LockID      string    `bson:"lockId"`              // Unique identifier for the worker that is currently processing this task
+	LockID      string    `bson:"lockId,omitempty"`    // Unique identifier for the worker that is currently processing this task
 	Name        string    `bson:"name"`                // Name of the task (used to identify the handler function)
 	Arguments   mapof.Any `bson:"arguments"`           // Data required to execute this task (marshalled as a map)
 	CreateDate  int64     `bson:"createDate"`          // Unix epoch seconds when this task was created
@@ -19,7 +19,7 @@ type Task struct {
 	Signature   string    `bson:"signature,omitempty"` // Signature of the task.  If a signature is present, then no other tasks will be allowed with this signature.
 	RetryCount  int       `bson:"retryCount"`          // Number of times that this task has already been retried
 	RetryMax    int       `bson:"retryMax"`            // Maximum number of times that this task can be retried
-	Error       string    `bson:"error"`               // Error (if any) from the last execution
+	Error       string    `bson:"error,omitempty"`     // Error (if any) from the last execution
 }
 
 // NewTask uses a Task object to create a new Task record
