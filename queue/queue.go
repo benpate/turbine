@@ -100,6 +100,7 @@ func (q *Queue) start() {
 		for _, task := range tasks {
 
 			if channel.Closed(q.done) {
+				log.Trace().Msg("Turbine Queue: done channel closed. Exiting.")
 				return
 			}
 
