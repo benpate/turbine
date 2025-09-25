@@ -20,10 +20,11 @@ type Queue struct {
 	buffer               chan Task     // buffer is a channel of tasks that are ready to be processed
 	done                 chan struct{} // Done channel is called to stop the queue
 	Enqueue              chan Task     // Channel for publishing tasks to the queue
+	// waitgroup            sync.WaitGroup // Waitgroup to track active workers
 }
 
 // New returns a fully initialized Queue object, with all options applied
-func New(options ...QueueOption) Queue {
+func New(options ...QueueOption) *Queue {
 
 	// Create the new Queue object
 	result := Queue{
@@ -35,6 +36,7 @@ func New(options ...QueueOption) Queue {
 		pollStorage:          true,
 		done:                 make(chan struct{}),
 		Enqueue:              make(chan Task, 16), // Default buffer size for the Enqueue channel
+		// waitgroup:            sync.WaitGroup{},    // Initialize the waitgroup
 	}
 
 	// Apply options
@@ -45,18 +47,19 @@ func New(options ...QueueOption) Queue {
 	// Create the task buffer last (to use the correct buffer size)
 	result.buffer = make(chan Task, result.bufferSize)
 
-	// Start `ProcessCount` processes to listen for new Tasks
+	// Poll the storage container for new Tasks
+	go result.start()
+
+	// Start workers to consume tasks
 	for i := 0; i < result.workerCount; i++ {
 		go result.startWorker()
 	}
 
-	// Poll the storage container for new Tasks
-	go result.start()
-
+	// Start the enqueue listener
 	go result.enqueue()
 
 	// UwU LOL.
-	return result
+	return &result
 }
 
 // Start runs the queue and listens for new tasks
@@ -190,7 +193,12 @@ func (q *Queue) Schedule(task Task, delay time.Duration) error {
 
 // Stop closes the queue and stops all workers (after they complete their current task)
 func (queue *Queue) Stop() {
+
+	// Send "stop" signal to all workers
 	close(queue.done)
+
+	// Wait until all workers have finished their current tasks
+	// queue.waitgroup.Wait()
 }
 
 // allowImmediate returns TRUE if the Task can be executed immediately

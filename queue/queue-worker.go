@@ -10,6 +10,10 @@ import (
 // the buffered channel and running them one at a time.
 func (q *Queue) startWorker() {
 
+	// Track our progress in the waitgroup
+	// q.waitgroup.Add(1)
+	// defer q.waitgroup.Done()
+
 	// Pull Tasks off of the buffered channel
 	for task := range q.buffer {
 

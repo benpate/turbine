@@ -60,7 +60,7 @@ func TestQueue_Stored(t *testing.T) {
 }
 
 // testQueue creates a new queue+storage on the local mongodb server.
-func testQueue(t *testing.T) queue.Queue {
+func testQueue(t *testing.T) *queue.Queue {
 
 	// Create a new MongoDB client
 	mongoOptions := options.ClientOptions{}
