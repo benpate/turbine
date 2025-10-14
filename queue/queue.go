@@ -125,6 +125,14 @@ func (q *Queue) enqueue() {
 	}
 }
 
+func (q *Queue) NewTask(name string, args map[string]any, options ...TaskOption) {
+	task := NewTask(name, args, options...)
+
+	if err := q.Publish(task); err != nil {
+		derp.Report(err)
+	}
+}
+
 // PublishTask adds a Task to the Queue
 func (q *Queue) Publish(task Task) error {
 
