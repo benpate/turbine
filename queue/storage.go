@@ -12,6 +12,9 @@ type Storage interface {
 	// DeleteTask removes a Task from the Storage provider
 	DeleteTask(taskID string) error
 
+	// DeleteTaskBySignature removes a Task from the Storage provider using its signature
+	DeleteTaskBySignature(signature string) error
+
 	// LogFailure writes a Task to the error log
 	LogFailure(task Task) error
 }

@@ -124,6 +124,28 @@ func (storage Storage) DeleteTask(taskID string) error {
 	return nil
 }
 
+func (storage Storage) DeleteTaskBySignature(signature string) error {
+	const location = "queue_mongo.DeleteTaskBySignature"
+
+	// Get a timeout context
+	timeout, cancel := timeoutContext(16)
+	defer cancel()
+
+	// Remove the task from the task queue
+	filter := bson.M{"signature": signature}
+	if _, err := storage.database.Collection(CollectionQueue).DeleteOne(timeout, filter); err != nil {
+
+		if err == mongo.ErrNoDocuments {
+			return nil
+		}
+
+		return derp.Wrap(err, location, "Unable to delete task from task queue")
+	}
+
+	// Success.
+	return nil
+}
+
 // LogFailure adds a task to the error log
 func (storage Storage) LogFailure(task queue.Task) error {
 

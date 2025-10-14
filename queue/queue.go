@@ -191,6 +191,10 @@ func (q *Queue) Schedule(task Task, delay time.Duration) error {
 	return nil
 }
 
+func (q *Queue) Delete(signature string) error {
+	return q.storage.DeleteTaskBySignature(signature)
+}
+
 // Stop closes the queue and stops all workers (after they complete their current task)
 func (queue *Queue) Stop() {
 
