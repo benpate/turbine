@@ -4,7 +4,7 @@ go 1.24.0
 
 require (
 	github.com/benpate/derp v0.34.0
-	github.com/benpate/rosetta v0.25.20
+	github.com/benpate/rosetta v0.25.21
 	github.com/rs/zerolog v1.34.0
 	github.com/stretchr/testify v1.11.1
 	go.mongodb.org/mongo-driver v1.17.6
@@ -12,7 +12,7 @@ require (
 
 require (
 	github.com/aymerick/douceur v0.2.0 // indirect
-	github.com/benpate/exp v0.8.6 // indirect
+	github.com/benpate/exp v0.8.7 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/golang/snappy v1.0.0 // indirect
 	github.com/gorilla/css v1.0.1 // indirect
