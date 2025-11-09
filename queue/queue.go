@@ -147,10 +147,10 @@ func (q *Queue) Publish(task Task) error {
 	}
 
 	// If the task is to be published asynchronously, then hold it in a goroutine
-	if delayMilliseconds := time.Duration(task.AsyncDelay); delayMilliseconds != 0 {
+	if delay := time.Duration(task.AsyncDelay) * time.Millisecond; delay != 0 {
 		go func() {
 			task.AsyncDelay = 0
-			time.Sleep(delayMilliseconds * time.Millisecond)
+			time.Sleep(delay)
 			derp.Report(q.Publish(task))
 		}()
 
