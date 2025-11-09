@@ -17,6 +17,7 @@ type Queue struct {
 	defaultPriority      int           // defaultPriority is the default priority to use when creating new tasks
 	runImmediatePriority int           // runImmediatePriority is the maximum priority value that will be tried immediately
 	defaultRetryMax      int           // defaultRetryMax is the default number of times to retry a task before giving up
+	preProcessor         PreProcessor  // optional pre-processor function that is executed on all tasks before they are published
 	buffer               chan Task     // buffer is a channel of tasks that are ready to be processed
 	done                 chan struct{} // Done channel is called to stop the queue
 	Enqueue              chan Task     // Channel for publishing tasks to the queue
@@ -136,6 +137,27 @@ func (q *Queue) NewTask(name string, args map[string]any, options ...TaskOption)
 // PublishTask adds a Task to the Queue
 func (q *Queue) Publish(task Task) error {
 
+	const location = "queue.Queue.Publish"
+
+	// Run the pre-processor on the task (if present)
+	if q.preProcessor != nil {
+		if err := q.preProcessor(&task); err != nil {
+			return derp.Wrap(err, location, "Invalid task. Rejected by PreProcessor", task)
+		}
+	}
+
+	// If the task is to be published asynchronously, then hold it in a goroutine
+	if delayMilliseconds := time.Duration(task.AsyncDelay); delayMilliseconds != 0 {
+		go func() {
+			task.AsyncDelay = 0
+			time.Sleep(delayMilliseconds * time.Millisecond)
+			derp.Report(q.Publish(task))
+		}()
+
+		// Exit this method (no error reporting possible)
+		return nil
+	}
+
 	// RULE: Update task.Priority if unset
 	if task.Priority == -1 {
 		task.Priority = q.defaultPriority
@@ -173,7 +195,7 @@ func (q *Queue) Publish(task Task) error {
 
 	// Default Case: Write the Task to the Storage provider
 	if err := q.storage.SaveTask(task); err != nil {
-		return derp.Wrap(err, "queue.Push", "Error saving task to database")
+		return derp.Wrap(err, "queue.Push", "Unable to save task to database")
 	}
 
 	// Success! (probably)
@@ -193,7 +215,7 @@ func (q *Queue) Schedule(task Task, delay time.Duration) error {
 
 	// Save the Journal to the Storage provider
 	if err := q.storage.SaveTask(task); err != nil {
-		return derp.Wrap(err, location, "Error saving task to database")
+		return derp.Wrap(err, location, "Unable to save task to database")
 	}
 
 	return nil

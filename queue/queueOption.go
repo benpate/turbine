@@ -57,3 +57,10 @@ func WithDefaultRetryMax(defaultRetryMax int) QueueOption {
 		q.defaultRetryMax = defaultRetryMax
 	}
 }
+
+// WithPreProcessor applies a gloabl taskOption that is
+func WithPreProcessor(preProcessor PreProcessor) QueueOption {
+	return func(q *Queue) {
+		q.preProcessor = preProcessor
+	}
+}
