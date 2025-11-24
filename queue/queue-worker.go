@@ -1,6 +1,8 @@
 package queue
 
 import (
+	"time"
+
 	"github.com/benpate/derp"
 	"github.com/benpate/rosetta/channel"
 	"github.com/rs/zerolog/log"
@@ -49,7 +51,31 @@ func (q *Queue) consume(task Task) error {
 
 			log.Trace().Str("location", location).Msg("Task succeeded.")
 			if err := q.onTaskSucceeded(task); err != nil {
-				return derp.Wrap(err, location, "Error setting task success")
+				return derp.Wrap(err, location, "Unable to set task success")
+			}
+
+			// UwU :: Return nil == success
+			return nil
+
+		// If the task is to be re-queued, then mark it as complete and run it again
+		case ResultStatusRequeue:
+
+			log.Trace().Str("location", location).Msg("Task succeeded. Requeuing.")
+			if err := q.onTaskSucceeded(task); err != nil {
+				return derp.Wrap(err, location, "Unable to set task success")
+			}
+
+			// Reset identifying values for this task
+			task.TaskID = ""
+			task.LockID = ""
+			task.Error = ""
+			task.StartDate = time.Now().Add(result.Delay).Unix()
+			task.TimeoutDate = 0
+			task.RetryCount = 0
+
+			// Queue the "new" task
+			if err := q.Publish(task); err != nil {
+				derp.Report(derp.Wrap(err, location, "Unable to re-publish task"))
 			}
 
 			// UwU :: Return nil == success
@@ -61,7 +87,7 @@ func (q *Queue) consume(task Task) error {
 			log.Trace().Str("location", location).Msg("Task error...")
 
 			if err := q.onTaskError(task, result.Error); err != nil {
-				return derp.Wrap(err, location, "Error setting task error", result.Error)
+				return derp.Wrap(err, location, "Unable to set task error", result.Error)
 			}
 
 			// "successfully" failed, but can be retried
@@ -73,7 +99,7 @@ func (q *Queue) consume(task Task) error {
 			log.Trace().Str("location", location).Msg("Task failure...")
 
 			if err := q.onTaskFailure(task, result.Error); err != nil {
-				return derp.Wrap(err, location, "Error setting task failure", result.Error)
+				return derp.Wrap(err, location, "Unable to set task failure", result.Error)
 			}
 
 			// Task failed successfully
@@ -81,7 +107,6 @@ func (q *Queue) consume(task Task) error {
 
 		// Unrecognised statuses are the same as "Ignored".
 		// If the consumer cannot match this task, then try the next consumer
-		// case ResultStatusIgnored:
 		default:
 			continue
 		}
