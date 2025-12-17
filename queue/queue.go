@@ -20,7 +20,6 @@ type Queue struct {
 	preProcessor         PreProcessor  // optional pre-processor function that is executed on all tasks before they are published
 	buffer               chan Task     // buffer is a channel of tasks that are ready to be processed
 	done                 chan struct{} // Done channel is called to stop the queue
-	Enqueue              chan Task     // Channel for publishing tasks to the queue
 	// waitgroup            sync.WaitGroup // Waitgroup to track active workers
 }
 
@@ -36,7 +35,6 @@ func New(options ...QueueOption) *Queue {
 		defaultRetryMax:      8, // 511 minutes => ~8.5 hours of retries
 		pollStorage:          true,
 		done:                 make(chan struct{}),
-		Enqueue:              make(chan Task, 16), // Default buffer size for the Enqueue channel
 		// waitgroup:            sync.WaitGroup{},    // Initialize the waitgroup
 	}
 
@@ -55,9 +53,6 @@ func New(options ...QueueOption) *Queue {
 	for i := 0; i < result.workerCount; i++ {
 		go result.startWorker()
 	}
-
-	// Start the enqueue listener
-	go result.enqueue()
 
 	// UwU LOL.
 	return &result
@@ -113,19 +108,7 @@ func (q *Queue) start() {
 	}
 }
 
-func (q *Queue) enqueue() {
-
-	for {
-		select {
-
-		case <-q.done:
-			return
-		case task := <-q.Enqueue:
-			go derp.Report(q.Publish(task))
-		}
-	}
-}
-
+// NewTask pushes a new task to the Queue and swallows any errors that are generated.
 func (q *Queue) NewTask(name string, args map[string]any, options ...TaskOption) {
 	task := NewTask(name, args, options...)
 
