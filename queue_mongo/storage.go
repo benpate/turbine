@@ -36,7 +36,6 @@ func (storage Storage) SaveTask(task queue.Task) error {
 	const location = "queue_mongo.SaveTask"
 
 	var taskID primitive.ObjectID
-	var err error
 
 	// Create a timeout context for 16 seconds
 	timeout, cancel := timeoutContext(16)
@@ -59,6 +58,7 @@ func (storage Storage) SaveTask(task queue.Task) error {
 
 	} else {
 
+		var err error
 		taskID, err = primitive.ObjectIDFromHex(task.TaskID)
 		if err != nil {
 			return derp.Wrap(err, location, "Invalid taskID")
