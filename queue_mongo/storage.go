@@ -61,7 +61,7 @@ func (storage Storage) SaveTask(task queue.Task) error {
 		var err error
 		taskID, err = primitive.ObjectIDFromHex(task.TaskID)
 		if err != nil {
-			return derp.Wrap(err, location, "Invalid taskID")
+			return derp.Wrap(err, location, "TaskID must be a valid ObjectID")
 		}
 	}
 
@@ -124,6 +124,7 @@ func (storage Storage) DeleteTask(taskID string) error {
 	return nil
 }
 
+// DeleteTaskBySignature removes a task from the queue by its signature
 func (storage Storage) DeleteTaskBySignature(signature string) error {
 	const location = "queue_mongo.DeleteTaskBySignature"
 
@@ -203,11 +204,11 @@ func (storage Storage) GetTasks() ([]queue.Task, error) {
 	cursor, err := storage.database.Collection(CollectionQueue).Find(timeout, filter, options)
 
 	if err != nil {
-		return result, derp.Wrap(err, location, "Error finding tasks")
+		return result, derp.Wrap(err, location, "Unable to find tasks")
 	}
 
 	if err := cursor.All(timeout, &result); err != nil {
-		return result, derp.Wrap(err, location, "Error decoding tasks")
+		return result, derp.Wrap(err, location, "Unable to decode tasks")
 	}
 
 	return result, nil
@@ -222,7 +223,7 @@ func (storage Storage) lockTasks(timeout context.Context, lockID primitive.Objec
 	tasks, err := storage.pickTasks(timeout)
 
 	if err != nil {
-		return derp.Wrap(err, location, "Error picking tasks")
+		return derp.Wrap(err, location, "Unable to pick tasks")
 	}
 
 	// Try to update these tasks IF they available to take
@@ -243,7 +244,7 @@ func (storage Storage) lockTasks(timeout context.Context, lockID primitive.Objec
 
 	// Try to update all matching tasks.  We get what we get.
 	if _, err := storage.database.Collection(CollectionQueue).UpdateMany(timeout, filter, update); err != nil {
-		return derp.Wrap(err, location, "Error updating tasks")
+		return derp.Wrap(err, location, "Unable to update tasks")
 	}
 
 	return nil
@@ -274,7 +275,7 @@ func (storage Storage) pickTasks(timeout context.Context) ([]primitive.ObjectID,
 	cursor, err := storage.database.Collection(CollectionQueue).Find(timeout, filter, options)
 
 	if err != nil {
-		return nil, derp.Wrap(err, location, "Error finding tasks")
+		return nil, derp.Wrap(err, location, "Unable to find tasks")
 	}
 
 	// Decode the response into a slice
@@ -283,7 +284,7 @@ func (storage Storage) pickTasks(timeout context.Context) ([]primitive.ObjectID,
 	}, 0)
 
 	if err := cursor.All(timeout, &temp); err != nil {
-		return nil, derp.Wrap(err, location, "Error decoding tasks")
+		return nil, derp.Wrap(err, location, "Unable to decode tasks")
 	}
 
 	// Extract the ObjectIDs from the slice
@@ -299,6 +300,8 @@ func (storage Storage) pickTasks(timeout context.Context) ([]primitive.ObjectID,
 // has a signature that is already in the queue
 func (storage Storage) isDuplicateSignature(timeout context.Context, signature string) bool {
 
+	const location = "queue_mongo.isDuplicateSignature"
+
 	if signature == "" {
 		return false
 	}
@@ -313,14 +316,14 @@ func (storage Storage) isDuplicateSignature(timeout context.Context, signature s
 	query := storage.database.Collection(CollectionQueue).FindOne(timeout, filter, options)
 
 	// If we can't retrieve a duplicate, then there isn't one.
-	if err := query.Decode(&task); err == nil {
-		return true
-	} else {
+	if err := query.Decode(&task); err != nil {
 
 		if err != mongo.ErrNoDocuments {
-			derp.Report(derp.Wrap(err, "queue_mongo.isDuplicateSignature", "Error finding duplicate signature"))
+			derp.Report(derp.Wrap(err, location, "Unable to find duplicate signature"))
 		}
 
 		return false
 	}
+
+	return true
 }

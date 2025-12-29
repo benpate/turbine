@@ -8,7 +8,7 @@ import (
 
 func TestQueue(t *testing.T) {
 
-	consumer := func(name string, args map[string]any) Result {
+	consumer := func(_ string, _ map[string]any) Result {
 		return Success()
 	}
 
@@ -19,7 +19,7 @@ func TestQueue(t *testing.T) {
 	}
 }
 
-func TestStop(t *testing.T) {
+func TestStop(_ *testing.T) {
 
 	q := New()
 	q.Stop()

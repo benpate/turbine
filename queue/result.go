@@ -2,7 +2,7 @@ package queue
 
 import "time"
 
-// ResultStatusSkip represents a task that was not processed because
+// ResultStatusIgnored represents a task that was not processed because
 // the consumer does not recognize it.  The task will be passed to
 // another consumer, or error out permanently.
 const ResultStatusIgnored = "IGNORED"

@@ -1,15 +1,16 @@
 package queue
 
-// QueueOption is a function that modifies a Queue object
+// QueueOption is a functional option that modifies a Queue object
 type QueueOption func(*Queue)
 
+// WithConsumers adds one or more consumers to process tasks from  the Queue
 func WithConsumers(consumers ...Consumer) QueueOption {
 	return func(q *Queue) {
 		q.consumers = append(q.consumers, consumers...)
 	}
 }
 
-// WithStorage sets the storage and unmarshaller for the queue
+// WithStorage sets the storage and unmarshaller for the Queue
 func WithStorage(storage Storage) QueueOption {
 	return func(q *Queue) {
 		q.storage = storage

@@ -1,6 +1,6 @@
 package queue
 
-// PreProcesor is a custom function that can be added to the Queue.
+// PreProcessor is a custom function that can be added to the Queue.
 // This function is executed on tasks BEFORE they are published to the Queue,
 // and can be used to modify task properties, or to reject tasks before they are
 // executed.  If this function returns an error, then the task is rejected with

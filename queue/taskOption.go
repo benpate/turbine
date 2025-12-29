@@ -2,6 +2,7 @@ package queue
 
 import "time"
 
+// TaskOption is a functional option that modifies a Task
 type TaskOption func(*Task)
 
 // WithPriority sets the priority of the task

@@ -1,3 +1,4 @@
+// Package queue provides a task queue with support for persistent storage and concurrent processing
 package queue
 
 import (
@@ -8,6 +9,7 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+// Queue represents a task queue with support for persistent storage and concurrent processing
 type Queue struct {
 	storage              Storage       // Storage is the interface to the database
 	consumers            []Consumer    // consumers contains all registered Consumer objects
@@ -20,7 +22,6 @@ type Queue struct {
 	preProcessor         PreProcessor  // optional pre-processor function that is executed on all tasks before they are published
 	buffer               chan Task     // buffer is a channel of tasks that are ready to be processed
 	done                 chan struct{} // Done channel is called to stop the queue
-	// waitgroup            sync.WaitGroup // Waitgroup to track active workers
 }
 
 // New returns a fully initialized Queue object, with all options applied
@@ -35,7 +36,6 @@ func New(options ...QueueOption) *Queue {
 		defaultRetryMax:      8, // 511 minutes => ~8.5 hours of retries
 		pollStorage:          true,
 		done:                 make(chan struct{}),
-		// waitgroup:            sync.WaitGroup{},    // Initialize the waitgroup
 	}
 
 	// Apply options
@@ -117,7 +117,7 @@ func (q *Queue) NewTask(name string, args map[string]any, options ...TaskOption)
 	}
 }
 
-// PublishTask adds a Task to the Queue
+// Publish adds a Task to the Queue
 func (q *Queue) Publish(task Task) error {
 
 	const location = "queue.Queue.Publish"
@@ -185,6 +185,7 @@ func (q *Queue) Publish(task Task) error {
 	return nil
 }
 
+// Schedule adds a Task to the Queue to be executed after a delay
 func (q *Queue) Schedule(task Task, delay time.Duration) error {
 
 	const location = "queue.Schedule"
@@ -204,22 +205,23 @@ func (q *Queue) Schedule(task Task, delay time.Duration) error {
 	return nil
 }
 
+// Delete removes a task from the queue by its signature
 func (q *Queue) Delete(signature string) error {
 	return q.storage.DeleteTaskBySignature(signature)
 }
 
 // Stop closes the queue and stops all workers (after they complete their current task)
-func (queue *Queue) Stop() {
+func (q *Queue) Stop() {
 
 	// Send "stop" signal to all workers
-	close(queue.done)
+	close(q.done)
 
 	// Wait until all workers have finished their current tasks
-	// queue.waitgroup.Wait()
+	// q.waitgroup.Wait()
 }
 
 // allowImmediate returns TRUE if the Task can be executed immediately
-func (queue *Queue) allowImmediate(task *Task) bool {
+func (q *Queue) allowImmediate(task *Task) bool {
 
 	// If the task has a signature, then it CANNOT be executed immediately
 	if task.Signature != "" {
@@ -227,5 +229,5 @@ func (queue *Queue) allowImmediate(task *Task) bool {
 	}
 
 	// Otherwise, tasks can execute immediately if their priority is less than or equal to the runImmediatePriority
-	return task.Priority <= queue.runImmediatePriority
+	return task.Priority <= q.runImmediatePriority
 }

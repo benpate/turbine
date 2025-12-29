@@ -6,7 +6,7 @@ import (
 	"github.com/benpate/turbine/queue"
 )
 
-func TestStorage(t *testing.T) {
+func TestStorage(_ *testing.T) {
 
 	var _ queue.Storage = Storage{}
 }

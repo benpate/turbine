@@ -90,7 +90,8 @@ func (storage Storage) DeleteTask(taskID string) error {
 	return nil
 }
 
-func (storage Storage) DeleteTaskBySignature(signature string) error {
+// DeleteTaskBySignature removes a task from the queue by its signature
+func (storage Storage) DeleteTaskBySignature(_ string) error {
 	return derp.NotImplemented("queue_filesystem.DeleteTaskBySignature", "Filesystem storage cannot delete task by signature.")
 }
 
