@@ -113,5 +113,5 @@ func (q *Queue) consume(task Task) error {
 	}
 
 	// No matching consumers found. Return disgrace.
-	return derp.InternalError(location, "No consumers available to process task", task)
+	return derp.Internal(location, "No consumers available to process task", task)
 }

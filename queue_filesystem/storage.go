@@ -99,7 +99,7 @@ func (storage Storage) DeleteTaskBySignature(_ string) error {
 func (storage Storage) LogFailure(task queue.Task) error {
 
 	const location = "queue_filesystem.LogFailure"
-	derp.Report(derp.InternalError(location, "Failure executing task", task))
+	derp.Report(derp.Internal(location, "Failure executing task", task))
 
 	return nil
 }

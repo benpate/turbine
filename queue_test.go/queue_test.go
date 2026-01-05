@@ -89,10 +89,10 @@ func testConsumer(name string, _ map[string]any) queue.Result {
 		return queue.Success()
 
 	case "TestError":
-		return queue.Error(derp.InternalError("TestError", "This is a test error"))
+		return queue.Error(derp.Internal("TestError", "This is a test error"))
 
 	case "TestFailure":
-		return queue.Failure(derp.InternalError("TestFailure", "This is a test failure"))
+		return queue.Failure(derp.Internal("TestFailure", "This is a test failure"))
 	}
 
 	return queue.Ignored()
