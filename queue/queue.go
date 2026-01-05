@@ -25,7 +25,7 @@ type Queue struct {
 }
 
 // New returns a fully initialized Queue object, with all options applied
-func New(options ...QueueOption) *Queue {
+func New(options ...Option) *Queue {
 
 	// Create the new Queue object
 	result := Queue{
@@ -191,7 +191,7 @@ func (q *Queue) Schedule(task Task, delay time.Duration) error {
 	const location = "queue.Schedule"
 
 	if q.storage == nil {
-		return derp.InternalError(location, "Must have a storage provider in order to schedule tasks")
+		return derp.Internal(location, "Must have a storage provider in order to schedule tasks")
 	}
 
 	// Set the task delay time
