@@ -7,7 +7,7 @@ require (
 	github.com/benpate/rosetta v0.25.26
 	github.com/rs/zerolog v1.34.0
 	github.com/stretchr/testify v1.11.1
-	go.mongodb.org/mongo-driver v1.17.6
+	go.mongodb.org/mongo-driver v1.17.8
 )
 
 require (
