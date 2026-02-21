@@ -35,7 +35,7 @@ func TestQueue_Immediate(t *testing.T) {
 	err = q.Publish(queue.NewTask("TestFailure", nil))
 	require.Nil(t, err)
 
-	time.Sleep(8 * time.Second)
+	// time.Sleep(8 * time.Second)
 }
 
 func TestQueue_Stored(t *testing.T) {
