@@ -46,19 +46,23 @@ func New(options ...Option) *Queue {
 	// Create the task buffer last (to use the correct buffer size)
 	result.buffer = make(chan Task, result.bufferSize)
 
-	// Poll the storage container for new Tasks
-	go result.start()
-
-	// Start workers to consume tasks
-	for i := 0; i < result.workerCount; i++ {
-		go result.startWorker()
-	}
-
 	// UwU LOL.
 	return &result
 }
 
-// Start runs the queue and listens for new tasks
+// Start begins processing tasks in the Queue
+func (q *Queue) Start() {
+
+	// Poll the storage container for new Tasks
+	go q.start()
+
+	// Start workers to consume tasks
+	for i := 0; i < q.workerCount; i++ {
+		go q.startWorker()
+	}
+}
+
+// start runs the queue and listens for new tasks
 func (q *Queue) start() {
 
 	// If we don't have a storage object, then we won't poll it for update
