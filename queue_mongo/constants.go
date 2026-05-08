@@ -4,4 +4,4 @@ package queue_mongo
 const CollectionQueue = "Queue"
 
 // CollectionLog is the name of the mongodb collection where completed/logged tasks are stored
-const CollectionLog = "Log"
+const CollectionLog = "QueueErrors"
