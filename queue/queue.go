@@ -69,6 +69,8 @@ func (q *Queue) Start() {
 // start runs the queue and listens for new tasks
 func (q *Queue) start() {
 
+	const location = "queue.Queue.start"
+
 	// If we don't have a storage object, then we won't poll it for update
 	if q.storage == nil {
 		return
@@ -93,7 +95,9 @@ func (q *Queue) start() {
 		tasks, err := q.storage.GetTasks()
 
 		if err != nil {
-			derp.Report(err)
+			// Pause before retrying so a failing storage backend doesn't hot-spin this loop.
+			derp.Report(derp.Wrap(err, location, "Unable to get tasks from storage"))
+			time.Sleep(1 * time.Minute)
 			continue
 		}
 
