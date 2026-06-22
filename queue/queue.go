@@ -220,7 +220,10 @@ func (q *Queue) Schedule(task Task, delay time.Duration) error {
 // Delete removes a task from the queue by its signature
 func (q *Queue) Delete(signature string) error {
 	const location = "queue.Queue.Delete"
-	return derp.Wrap(q.storage.DeleteTaskBySignature(signature), location, "Unable to delete task by signature")
+	if err := q.storage.DeleteTaskBySignature(signature); err != nil {
+		return derp.Wrap(err, location, "Unable to delete task by signature")
+	}
+	return nil
 }
 
 // Stop closes the queue and stops all workers (after they complete their current task)
