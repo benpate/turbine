@@ -148,6 +148,12 @@ func TestDelete(t *testing.T) {
 	require.Equal(t, []string{"my-signature"}, storage.deletedBySig)
 }
 
+func TestDelete_NoStorage(t *testing.T) {
+	// A memory-only queue cannot delete tasks; it must error, not panic
+	q := New()
+	require.Error(t, q.Delete("my-signature"))
+}
+
 func TestStop_ClosesDone(t *testing.T) {
 
 	q := New()
