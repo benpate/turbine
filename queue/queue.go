@@ -190,7 +190,7 @@ func (q *Queue) Publish(task Task) error {
 
 	// Default Case: Write the Task to the Storage provider
 	if err := q.storage.SaveTask(task); err != nil {
-		return derp.Wrap(err, "queue.Push", "Unable to save task to database")
+		return derp.Wrap(err, location, "Unable to save task to database")
 	}
 
 	// Success! (probably)
@@ -219,7 +219,8 @@ func (q *Queue) Schedule(task Task, delay time.Duration) error {
 
 // Delete removes a task from the queue by its signature
 func (q *Queue) Delete(signature string) error {
-	return q.storage.DeleteTaskBySignature(signature)
+	const location = "queue.Queue.Delete"
+	return derp.Wrap(q.storage.DeleteTaskBySignature(signature), location, "Unable to delete task by signature")
 }
 
 // Stop closes the queue and stops all workers (after they complete their current task)
