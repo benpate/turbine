@@ -15,37 +15,40 @@ There are many, many message queue tools. Perhaps you should use one of those in
 
 1. is a distributed queue that can be shared between several producer and consumer servers simultaneously
 2. supports swappable storage providers, with the first provider being MongoDB.
-6. supports fast, in-memory queues using Golang channels
+3. supports fast, in-memory queues using Golang channels
 4. can retry failed jobs (with exponential backoff)
-5. can schedule jobs to in the future
-
-## Pushing Tasks to the Queue
-
-```go
-// Create a Task with any parameters
-task := queue.NewTask(
-    "TaskName" // Task Name
-    map[string]any{ // Parameters
-        "foo": "bar",
-        "baz": 42,
-    }
-)
-
-// Publish the task to the Queue (this will happen quickly)
-if err := queue.Publish(task); err != nil {
-    // only errors related to queuing the task
-}
-```
+5. can schedule jobs in the future
 
 ## Run the Queue
 
 ```go
 // Create and start a queue
 q := queue.New(
-    queue.WithConsumers(), // one or more "consumer" functions (below)
-    queue.WithStorage(),   // optional storage adapter persists tasks 
-    queue.WithTimeout(),   // other configs, like timeouts, retries, etc
+    queue.WithConsumers(myConsumer),  // one or more "consumer" functions (below)
+    queue.WithStorage(provider),      // optional storage adapter persists tasks
+    queue.WithWorkerCount(16),        // other configs: worker count, buffer size, retries, etc.
 )
+
+q.Start() // launch the worker goroutines
+defer q.Stop()
+```
+
+## Pushing Tasks to the Queue
+
+```go
+// Create a Task with any parameters
+task := queue.NewTask(
+    "TaskName", // Task Name
+    map[string]any{ // Parameters
+        "foo": "bar",
+        "baz": 42,
+    },
+)
+
+// Publish the task to the Queue (this will happen quickly)
+if err := q.Publish(task); err != nil {
+    // only errors related to queuing the task
+}
 ```
 
 ## Consuming Tasks from the Queue
@@ -54,17 +57,24 @@ When the turbine queue receives a task, it tries to execute it using one or more
 functions, which have the following signature:
 
 ```go
-func Consumer(name string, args map[string]any) (bool, error)
+func Consumer(name string, args map[string]any) queue.Result
 ```
 
-It is the consumer's job to identify the task by name, and decide if it can 
-execute it or not.  You can configure any number of consumer functions, so if 
-a task is not recognized, it is passed to the next consumer until a match is found.
+It is the consumer's job to identify the task by name, and decide if it can
+execute it or not.  You can configure any number of consumer functions, so if
+a task is not recognized (the consumer returns `queue.Ignored()`), it is passed
+to the next consumer until a match is found.
 
-If the consumer DOES recognize the Task, then it executes the job and returns TRUE,
-along with an error result (or nil if the task was successful).
+If the consumer DOES recognize the Task, then it executes the job and returns one
+of the `queue.Result` constructors:
 
-When a task return an error, it is re-queued according to Turbine's exponential backoff logic, and will be re-run at some point in the future.
+- `queue.Success()` — the task completed successfully
+- `queue.Error(err)` — the task failed but CAN be retried
+- `queue.Failure(err)` — the task failed and should NOT be retried
+- `queue.Requeue(delay)` — the task succeeded and should run again after `delay`
+- `queue.Ignored()` — this consumer does not handle this task
+
+When a consumer returns `queue.Error`, the task is re-queued according to Turbine's exponential backoff logic, and will be re-run at some point in the future.
 
 ## Mongo Storage Provider
 
@@ -82,11 +92,13 @@ import (
     "github.com/benpate/turbine/queue_mongo"
 )
 
-// Create a MongoDB database connection
-connection := mongo.Connect(...) 
+// Connect to MongoDB and select a database
+client, err := mongo.Connect(ctx, options.Client().ApplyURI("mongodb://..."))
+database := client.Database("myDatabase")
 
-// Pass the DB connection into the storage provider
-provider := queue_mongo.New(connection)
+// Pass the database into the storage provider, along with the number of
+// tasks to lock per batch and the lock timeout (in minutes)
+provider := queue_mongo.New(database, 32, 5)
 
 // Initialize the queue with the storage provider
 q := queue.New(queue.WithStorage(provider))
