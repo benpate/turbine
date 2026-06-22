@@ -169,7 +169,7 @@ func (q *Queue) Publish(task Task) error {
 		return nil
 	}
 
-	// Special Case #2: If the task is marked for immedicate execution, then try to
+	// Special Case #2: If the task is marked for immediate execution, then try to
 	// put it directly into the in-memory buffer.  If the current buffer is full, then
 	// write it to disk
 	if q.allowImmediate(&task) {

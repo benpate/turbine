@@ -8,7 +8,7 @@ import (
 
 // Task wraps a Task with the metadata required to track its runs and retries.
 type Task struct {
-	TaskID      string    `bson:"taskId"`              // Unique identfier for this task
+	TaskID      string    `bson:"taskId"`              // Unique identifier for this task
 	LockID      string    `bson:"lockId,omitempty"`    // Unique identifier for the worker that is currently processing this task
 	Name        string    `bson:"name"`                // Name of the task (used to identify the handler function)
 	Arguments   mapof.Any `bson:"arguments"`           // Data required to execute this task (marshalled as a map)
@@ -20,7 +20,7 @@ type Task struct {
 	RetryCount  int       `bson:"retryCount"`          // Number of times that this task has already been retried
 	RetryMax    int       `bson:"retryMax"`            // Maximum number of times that this task can be retried
 	Error       string    `bson:"error,omitempty"`     // Error (if any) from the last execution
-	AsyncDelay  int       `bson:"-"`                   // If non-zero, then the `Publish` method will execute in a separate goroutine, and will sleep for this many miliseconds before publishing the Task.
+	AsyncDelay  int       `bson:"-"`                   // If non-zero, then the `Publish` method will execute in a separate goroutine, and will sleep for this many milliseconds before publishing the Task.
 }
 
 // NewTask uses a Task object to create a new Task record

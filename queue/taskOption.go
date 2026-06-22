@@ -12,13 +12,13 @@ func WithPriority(priority int) TaskOption {
 	}
 }
 
-// WithAsyncDelay sets a number of miliseconds to wait
-// before publishing this task onto the queue. If this vaue is non-zero
+// WithAsyncDelay sets a number of milliseconds to wait
+// before publishing this task onto the queue. If this value is non-zero
 // then a new goroutine will be launched that will sleep, then re-publish
 // the task.
-func WithAsyncDelay(miliseconds int) TaskOption {
+func WithAsyncDelay(milliseconds int) TaskOption {
 	return func(task *Task) {
-		task.AsyncDelay = miliseconds
+		task.AsyncDelay = milliseconds
 	}
 }
 

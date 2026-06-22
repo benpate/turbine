@@ -4,17 +4,17 @@ package queue
 // without a real database. It records every call so tests can assert on them,
 // and exposes error fields so failure paths can be exercised.
 type mockStorage struct {
-	tasks       []Task
-	saved       []Task
-	deleted     []string
+	tasks        []Task
+	saved        []Task
+	deleted      []string
 	deletedBySig []string
-	failures    []Task
+	failures     []Task
 
-	getTasksErr error
-	saveErr     error
-	deleteErr   error
+	getTasksErr  error
+	saveErr      error
+	deleteErr    error
 	deleteSigErr error
-	logErr      error
+	logErr       error
 }
 
 func (m *mockStorage) GetTasks() ([]Task, error) {

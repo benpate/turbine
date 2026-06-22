@@ -126,6 +126,6 @@ func TestLogFailure(t *testing.T) {
 	require.NoError(t, storage.LogFailure(queue.NewTask("x", nil)))
 }
 
-func TestStorage_ImplementsInterface(t *testing.T) {
+func TestStorage_ImplementsInterface(_ *testing.T) {
 	var _ queue.Storage = Storage{}
 }

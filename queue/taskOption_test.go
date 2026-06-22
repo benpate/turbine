@@ -13,8 +13,8 @@ func TestNewTask_Defaults(t *testing.T) {
 
 	require.Equal(t, "myTask", task.Name)
 	require.Equal(t, 1, task.Arguments["a"])
-	require.Equal(t, -1, task.Priority)   // unset sentinel
-	require.Equal(t, -1, task.RetryMax)   // unset sentinel
+	require.Equal(t, -1, task.Priority) // unset sentinel
+	require.Equal(t, -1, task.RetryMax) // unset sentinel
 	require.Equal(t, 0, task.RetryCount)
 	require.Equal(t, 0, task.AsyncDelay)
 	require.Equal(t, task.CreateDate, task.StartDate)

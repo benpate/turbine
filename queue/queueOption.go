@@ -59,7 +59,7 @@ func WithDefaultRetryMax(defaultRetryMax int) Option {
 	}
 }
 
-// WithPreProcessor applies a gloabl taskOption that is
+// WithPreProcessor sets a global PreProcessor function that runs on every task before it is published.
 func WithPreProcessor(preProcessor PreProcessor) Option {
 	return func(q *Queue) {
 		q.preProcessor = preProcessor

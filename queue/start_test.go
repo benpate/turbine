@@ -19,13 +19,13 @@ func (p *pollStorage) GetTasks() ([]Task, error) {
 	return p.batch, nil
 }
 
-func TestStart_NoStorage(t *testing.T) {
+func TestStart_NoStorage(_ *testing.T) {
 	// With no storage, start() returns immediately.
 	q := New()
 	q.start() // must not block or panic
 }
 
-func TestStart_PollingDisabled(t *testing.T) {
+func TestStart_PollingDisabled(_ *testing.T) {
 	// With polling disabled, start() returns immediately.
 	q := New(WithStorage(&mockStorage{}), WithPollStorage(false))
 	q.start()

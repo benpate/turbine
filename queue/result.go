@@ -73,7 +73,7 @@ func Error(err error) Result {
 	}
 }
 
-// Failure returns a Result object with a status of "HALT"
+// Failure returns a Result object with a status of "FAILURE"
 func Failure(err error) Result {
 	return Result{
 		Status: ResultStatusFailure,
