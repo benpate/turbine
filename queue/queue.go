@@ -2,6 +2,7 @@
 package queue
 
 import (
+	"sync"
 	"time"
 
 	"github.com/benpate/derp"
@@ -11,17 +12,18 @@ import (
 
 // Queue represents a task queue with support for persistent storage and concurrent processing
 type Queue struct {
-	storage              Storage       // Storage is the interface to the database
-	consumers            []Consumer    // consumers contains all registered Consumer objects
-	workerCount          int           // workerCount represents the number of goroutines to use for processing Tasks concurrently. Default process count is 16
-	bufferSize           int           // bufferSize determines the number of Tasks to lock in one transaction. Default buffer size is 32
-	pollStorage          bool          // pollStorage determines if the queue should poll the database for new tasks. Default is true
-	defaultPriority      int           // defaultPriority is the default priority to use when creating new tasks
-	runImmediatePriority int           // runImmediatePriority is the maximum priority value that will be tried immediately
-	defaultRetryMax      int           // defaultRetryMax is the default number of times to retry a task before giving up
-	preProcessor         PreProcessor  // optional pre-processor function that is executed on all tasks before they are published
-	buffer               chan Task     // buffer is a channel of tasks that are ready to be processed
-	done                 chan struct{} // Done channel is called to stop the queue
+	storage              Storage        // Storage is the interface to the database
+	consumers            []Consumer     // consumers contains all registered Consumer objects
+	workerCount          int            // workerCount represents the number of goroutines to use for processing Tasks concurrently. Default process count is 16
+	bufferSize           int            // bufferSize determines the number of Tasks to lock in one transaction. Default buffer size is 32
+	pollStorage          bool           // pollStorage determines if the queue should poll the database for new tasks. Default is true
+	defaultPriority      int            // defaultPriority is the default priority to use when creating new tasks
+	runImmediatePriority int            // runImmediatePriority is the maximum priority value that will be tried immediately
+	defaultRetryMax      int            // defaultRetryMax is the default number of times to retry a task before giving up
+	preProcessor         PreProcessor   // optional pre-processor function that is executed on all tasks before they are published
+	buffer               chan Task      // buffer is a channel of tasks that are ready to be processed
+	done                 chan struct{}  // done channel is closed to signal all workers to stop
+	workers              sync.WaitGroup // workers tracks the running worker goroutines so Stop can wait for them to exit
 }
 
 // New returns a fully initialized Queue object, with all options applied
@@ -56,8 +58,10 @@ func (q *Queue) Start() {
 	// Poll the storage container for new Tasks
 	go q.start()
 
-	// Start workers to consume tasks
+	// Start workers to consume tasks. Add to the WaitGroup *before* launching
+	// each goroutine so Stop can reliably wait for all of them to exit.
 	for i := 0; i < q.workerCount; i++ {
+		q.workers.Add(1)
 		go q.startWorker()
 	}
 }
@@ -220,8 +224,8 @@ func (q *Queue) Stop() {
 	// Send "stop" signal to all workers
 	close(q.done)
 
-	// Wait until all workers have finished their current tasks
-	// q.waitgroup.Wait()
+	// Wait until all workers have finished their current task and exited
+	q.workers.Wait()
 }
 
 // allowImmediate returns TRUE if the Task can be executed immediately

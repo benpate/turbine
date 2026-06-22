@@ -4,29 +4,31 @@ import (
 	"time"
 
 	"github.com/benpate/derp"
-	"github.com/benpate/rosetta/channel"
 	"github.com/rs/zerolog/log"
 )
 
-// startWorker runs a single worker process, pulling Tasks off
-// the buffered channel and running them one at a time.
+// startWorker runs a single, long-lived worker process, pulling Tasks off
+// the buffered channel and running them one at a time. It blocks waiting for
+// new work for the entire lifecycle of the Queue, and only exits when Stop
+// closes the done channel.
 func (q *Queue) startWorker() {
 
-	// Track our progress in the waitgroup
-	// q.waitgroup.Add(1)
-	// defer q.waitgroup.Done()
+	// Signal the WaitGroup when this worker exits, so Stop can return.
+	defer q.workers.Done()
 
-	// Pull Tasks off of the buffered channel
-	for task := range q.buffer {
+	for {
+		// Block until a Task arrives or the queue is stopped. The done case is
+		// what lets an idle worker exit on Stop; without it, a worker parked on
+		// <-q.buffer would block forever and leak (buffer is never closed).
+		select {
 
-		// Execute the Task
-		if err := q.consume(task); err != nil {
-			derp.Report(err)
-		}
-
-		// If the queue has stopped, then exit the worker
-		if channel.Closed(q.done) {
+		case <-q.done:
 			return
+
+		case task := <-q.buffer:
+			if err := q.consume(task); err != nil {
+				derp.Report(err)
+			}
 		}
 	}
 }

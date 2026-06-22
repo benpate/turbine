@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestStartWorker_DrainsBuffer(t *testing.T) {
+func TestStartWorker_ProcessesBufferedTasks(t *testing.T) {
 
 	var mu sync.Mutex
 	consumed := make([]string, 0)
@@ -20,34 +20,50 @@ func TestStartWorker_DrainsBuffer(t *testing.T) {
 		return Success()
 	}))
 
-	// Pre-load the buffer, then close it so startWorker exits once drained.
+	// Pre-load the buffer with work for the worker to pick up.
 	q.buffer <- Task{Name: "a"}
 	q.buffer <- Task{Name: "b"}
 	q.buffer <- Task{Name: "c"}
-	close(q.buffer)
 
-	q.startWorker()
+	// The worker is a long-lived goroutine; it only returns when done is closed.
+	q.workers.Add(1)
+	go q.startWorker()
+
+	// Once all three tasks have been consumed, stop the worker.
+	require.Eventually(t, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return len(consumed) == 3
+	}, time.Second, 5*time.Millisecond)
+
+	q.Stop()
 
 	require.ElementsMatch(t, []string{"a", "b", "c"}, consumed)
 }
 
-func TestStartWorker_StopsWhenDoneClosed(t *testing.T) {
+func TestStartWorker_ExitsWhenDoneClosed(t *testing.T) {
 
 	q := New(WithConsumers(func(string, map[string]any) Result {
 		return Success()
 	}))
 
-	// Signal the worker to stop after its first task
-	close(q.done)
+	// A worker with an empty buffer is parked waiting for work.
+	q.workers.Add(1)
+	done := make(chan struct{})
+	go func() {
+		q.startWorker()
+		close(done)
+	}()
 
-	q.buffer <- Task{Name: "a"}
-	q.buffer <- Task{Name: "b"}
+	// Closing done must wake the idle worker and let it exit (no goroutine leak).
+	q.Stop()
 
-	// startWorker should process the first task, observe the closed done
-	// channel, and return without draining the rest.
-	q.startWorker()
-
-	require.Equal(t, 1, len(q.buffer)) // one task remains unprocessed
+	select {
+	case <-done:
+		// success: the worker returned
+	case <-time.After(time.Second):
+		t.Fatal("startWorker did not exit after done was closed")
+	}
 }
 
 func TestStartAndStop_NoStorage(t *testing.T) {
