@@ -49,10 +49,15 @@ func (q *Queue) onTaskError(task Task, err error) error {
 	task.RetryCount++
 	task.Error = derp.Serialize(err)
 
-	// If there is no storage provider, then use the buffer to queue the task
+	// If there is no storage provider, then use the buffer to queue the task.
+	// Select on q.done as well, so a worker blocked on a full buffer at shutdown
+	// exits cleanly instead of deadlocking against Stop.
 	if q.storage == nil {
 		log.Trace().Str("location", location).Msg("Storage is nil.  Unable to log error.")
-		q.buffer <- task
+		select {
+		case q.buffer <- task:
+		case <-q.done:
+		}
 		return nil
 	}
 
