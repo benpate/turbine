@@ -19,8 +19,6 @@ func (q *Queue) onTaskSucceeded(task Task) error {
 		return nil
 	}
 
-	// TODO: Calculate statistics here?
-
 	// Remove the task from the queue
 	if err := q.storage.DeleteTask(task.TaskID); err != nil {
 		return derp.Wrap(err, location, "Unable to remove task from queue")
