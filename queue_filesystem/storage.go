@@ -124,22 +124,25 @@ func (storage Storage) GetTasks() ([]queue.Task, error) {
 			continue
 		}
 
+		// Use the full path for both reading and removing, so they cannot diverge
+		path := storage.directory + "/" + filename
+
 		// Read the first file in the directory
-		file, err := os.ReadFile(storage.directory + "/" + filename)
+		file, err := os.ReadFile(path)
 
 		if err != nil {
-			return nil, derp.Wrap(err, location, "Unable to read task file", filename)
+			return nil, derp.Wrap(err, location, "Unable to read task file", path)
 		}
 
 		// Unmarshal the file into a Task
 		task := queue.Task{}
 		if err := json.Unmarshal(file, &task); err != nil {
-			return nil, derp.Wrap(err, location, "Unable to unmarshal task file", filename)
+			return nil, derp.Wrap(err, location, "Unable to unmarshal task file", path)
 		}
 
 		// Remove the task from the directory (because we're gonna execute it nao)
-		if err := os.Remove(filename); err != nil {
-			derp.Report(derp.Wrap(err, location, "Unable to delete task file", filename))
+		if err := os.Remove(path); err != nil {
+			derp.Report(derp.Wrap(err, location, "Unable to delete task file", path))
 		}
 
 		// Success.  Return the single task.

@@ -45,6 +45,16 @@ func TestGetTasks(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 1, len(tasks))
 	require.Equal(t, "hello", tasks[0].Name)
+
+	// GetTasks must remove the task file, so a second call returns nothing
+	// (otherwise the same task would be re-executed on every poll).
+	files, err := os.ReadDir(dir)
+	require.NoError(t, err)
+	require.Equal(t, 0, len(files))
+
+	tasks, err = storage.GetTasks()
+	require.NoError(t, err)
+	require.Equal(t, 0, len(tasks))
 }
 
 func TestGetTasks_EmptyDirectory(t *testing.T) {
