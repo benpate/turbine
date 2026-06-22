@@ -2,6 +2,7 @@ package queue_mongo
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/benpate/derp"
@@ -136,7 +137,7 @@ func (storage Storage) DeleteTaskBySignature(signature string) error {
 	filter := bson.M{"signature": signature}
 	if _, err := storage.database.Collection(CollectionQueue).DeleteOne(timeout, filter); err != nil {
 
-		if err == mongo.ErrNoDocuments {
+		if errors.Is(err, mongo.ErrNoDocuments) {
 			return nil
 		}
 
@@ -318,7 +319,7 @@ func (storage Storage) isDuplicateSignature(timeout context.Context, signature s
 	// If we can't retrieve a duplicate, then there isn't one.
 	if err := query.Decode(&task); err != nil {
 
-		if err != mongo.ErrNoDocuments {
+		if !errors.Is(err, mongo.ErrNoDocuments) {
 			derp.Report(derp.Wrap(err, location, "Unable to find duplicate signature"))
 		}
 
