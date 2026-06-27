@@ -140,7 +140,7 @@ func (storage Storage) GetTasks() ([]queue.Task, error) {
 			return nil, derp.Wrap(err, location, "Unable to unmarshal task file", path)
 		}
 
-		// Remove the task from the directory (because we're gonna execute it nao)
+		// Remove the task from the directory, because we are about to execute it
 		if err := os.Remove(path); err != nil {
 			derp.Report(derp.Wrap(err, location, "Unable to delete task file", path))
 		}

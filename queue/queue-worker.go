@@ -104,7 +104,7 @@ func (q *Queue) applyResult(task Task, result Result) (bool, error) {
 			return true, derp.Wrap(err, location, "Setting task error", result.Error)
 		}
 
-		// "successfully" failed, but can be retried
+		// The consumer owned this task; recording the error (and re-queue) succeeded.
 		return true, nil
 
 	// If the Task fails and should not be retried, then mark it as failed
@@ -116,7 +116,7 @@ func (q *Queue) applyResult(task Task, result Result) (bool, error) {
 			return true, derp.Wrap(err, location, "Setting task failure", result.Error)
 		}
 
-		// Task failed successfully
+		// The consumer owned this task; recording the failure succeeded.
 		return true, nil
 
 	// Unrecognised statuses are the same as "Ignored": this consumer did not

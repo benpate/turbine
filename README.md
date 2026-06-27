@@ -76,6 +76,28 @@ of the `queue.Result` constructors:
 
 When a consumer returns `queue.Error`, the task is re-queued according to Turbine's exponential backoff logic, and will be re-run at some point in the future.
 
+## Scheduling and Deleting Tasks
+
+Both of these methods require a storage provider; on a memory-only queue they return an error.
+
+```go
+// Schedule a task to run after a delay (instead of immediately)
+if err := q.Schedule(task, 30*time.Minute); err != nil {
+    // only errors related to storing the task
+}
+```
+
+Use a `Signature` to guarantee that only one copy of a task is active at a time. A queued task can then be removed by that same signature:
+
+```go
+task := queue.NewTask("TaskName", args, queue.WithSignature("daily-report"))
+
+// Remove a queued task by its signature
+if err := q.Delete("daily-report"); err != nil {
+    // only errors related to deleting the task
+}
+```
+
 ## Mongo Storage Provider
 
 Turbine is built to support pluggable storage providers, so that any datastore can be used to manage queued tasks.
