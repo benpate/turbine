@@ -1,17 +1,17 @@
-# Turbine
+# ⚙️ Turbine
 
 <img src="https://github.com/benpate/turbine/raw/main/meta/banner.webp" style="width:100%; display:block; margin-bottom:20px;"  alt="Oil painting titled: Dutch landscape with windmills, by Gerard Delfgaauw (1882-1947)">
 
 
-[![GoDoc](https://img.shields.io/badge/go-documentation-blue.svg?style=flat-square)](http://pkg.go.dev/github.com/benpate/turbine)
+[![Go Reference](https://pkg.go.dev/badge/github.com/benpate/turbine.svg)](https://pkg.go.dev/github.com/benpate/turbine)
 [![Version](https://img.shields.io/github/v/release/benpate/turbine?include_prereleases&style=flat-square&color=brightgreen)](https://github.com/benpate/turbine/releases)
 [![Build Status](https://img.shields.io/github/actions/workflow/status/benpate/turbine/go.yml?style=flat-square)](https://github.com/benpate/turbine/actions/workflows/go.yml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/benpate/turbine?style=flat-square)](https://goreportcard.com/report/github.com/benpate/turbine)
 [![Codecov](https://img.shields.io/codecov/c/github/benpate/turbine.svg?style=flat-square)](https://codecov.io/gh/benpate/turbine)
 
-## Fast, distributed message queue for Golang and MongoDB
+## Fast, Distributed Message Queue for Go and MongoDB
 
-There are many, many message queue tools. Perhaps you should use one of those instead.  But Turbine fills a unique niche in that it:
+There are many, many message queue tools. Perhaps you should use one of those instead. But Turbine fills a unique niche in that it:
 
 1. is a distributed queue that can be shared between several producer and consumer servers simultaneously
 2. supports swappable storage providers, with the first provider being MongoDB.
@@ -102,9 +102,9 @@ if err := q.Delete("daily-report"); err != nil {
 
 Turbine is built to support pluggable storage providers, so that any datastore can be used to manage queued tasks.
 
-Currently, there is a single storage provider for Mongodb, which safely queues and dequeues tasks for any number of distributed queue workers.  However, [storage providers implement a simple interface](https://pkg.go.dev/github.com/benpate/turbine@v0.1.0/queue#Storage), so it is simple to create a new storage provider for any back end that you want to use.  
+Currently, there is a single storage provider for MongoDB, which safely queues and dequeues tasks for any number of distributed queue workers. However, [storage providers implement a simple interface](https://pkg.go.dev/github.com/benpate/turbine@v0.1.0/queue#Storage), so it is simple to create a new storage provider for any back end that you want to use.
 
-**IMPORTANT**: If you do not use a storage provider, the Turbine queue will still work, but will only work in memory.  This means that items cannot be queued for future dates, and will not have a retry delay.
+**IMPORTANT**: If you do not use a storage provider, the Turbine queue will still work, but will only work in memory. This means that items cannot be queued for future dates, and will not have a retry delay.
 
 To initialize the storage provider, use the following code:
 
@@ -125,3 +125,11 @@ provider := queue_mongo.New(database, 32, 5)
 // Initialize the queue with the storage provider
 q := queue.New(queue.WithStorage(provider))
 ```
+
+## Image Credit
+
+The banner is *Dutch landscape with windmills* by Gerard Delfgaauw (1882–1947). The work is in the public domain.
+
+## Pull Requests Welcome
+
+I'm trying to make Turbine the best it can be, and your help is greatly appreciated. If you find a bug or have an idea for a new feature, please open an issue or submit a pull request. We're all in this together! ⚙️
