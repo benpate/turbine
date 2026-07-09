@@ -40,6 +40,16 @@ func (result Result) NotSuccessful() bool {
 	return !result.IsSuccessful()
 }
 
+// IsNil returns TRUE if the Result is empty (i.e. no status)
+func (result Result) IsNil() bool {
+	return result.Status == ""
+}
+
+// NotNil returns TRUE if the Result is NOT empty (i.e. has a status)
+func (result Result) NotNil() bool {
+	return result.Status != ""
+}
+
 // Ignored returns a Result object that has been "IGNORED"
 // This happens when a consumer does not recognize the task name
 func Ignored() Result {
