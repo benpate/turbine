@@ -39,38 +39,12 @@ func (q *Queue) consume(task Task) error {
 
 	const location = "queue.consume"
 
-	for _, consumeFunc := range q.consumers {
+	// Dispatch the task to the consumers until one matches or all have been tried.
+	result, consumed := q.dispatch(task)
 
-		// Try to run the Task
-		result := consumeFunc(task.Name, task.Arguments)
-
-		log.Trace().Str("location", location).Str("name", task.Name).Str("status", result.Status).Msg("Task executed")
-		derp.Report(result.Error)
-
-		// Apply the result. If this consumer ignored the task, try the next one.
-		handled, err := q.applyResult(task, result)
-
-		if !handled {
-			continue
-		}
-
-		if err != nil {
-			return derp.Wrap(err, location, "Applying result for task", task)
-		}
-
-		return nil
+	if !consumed {
+		return derp.Internal(location, "No consumers available to process task", task)
 	}
-
-	// No matching consumers found. Return disgrace.
-	return derp.Internal(location, "No consumers available to process task", task)
-}
-
-// applyResult records the outcome of a single consumer run. It returns
-// handled=false when the consumer ignored the task (so the caller tries the
-// next consumer), and handled=true once a consumer has owned the result.
-func (q *Queue) applyResult(task Task, result Result) (bool, error) {
-
-	const location = "queue.applyResult"
 
 	switch result.Status {
 
@@ -79,51 +53,91 @@ func (q *Queue) applyResult(task Task, result Result) (bool, error) {
 
 		log.Trace().Str("location", location).Msg("Task succeeded.")
 		if err := q.onTaskSucceeded(task); err != nil {
-			return true, derp.Wrap(err, location, "Setting task success")
+			return derp.Wrap(err, location, "Setting task success")
 		}
-
-		return true, nil
 
 	// If the task is to be re-queued, then mark it as complete and run it again
 	case ResultStatusRequeue:
 
 		log.Trace().Str("location", location).Msg("Task succeeded. Requeuing.")
 		if err := q.onTaskSucceeded(task); err != nil {
-			return true, derp.Wrap(err, location, "Setting task success")
+			return derp.Wrap(err, location, "Setting task success")
 		}
 
 		q.requeueTask(task, result.Delay)
-		return true, nil
 
 	// If the Task fails but can be retried, then try to re-queue for another attempt
 	case ResultStatusError:
 
 		log.Trace().Str("location", location).Msg("Task error...")
+		derp.Report(result.Error)
 
 		if err := q.onTaskError(task, result.Error); err != nil {
-			return true, derp.Wrap(err, location, "Setting task error", result.Error)
+			return derp.Wrap(err, location, "Setting task error", result.Error)
 		}
-
-		// "successfully" failed, but can be retried
-		return true, nil
 
 	// If the Task fails and should not be retried, then mark it as failed
 	case ResultStatusFailure:
 
 		log.Trace().Str("location", location).Msg("Task failure...")
+		derp.Report(result.Error)
 
 		if err := q.onTaskFailure(task, result.Error); err != nil {
-			return true, derp.Wrap(err, location, "Setting task failure", result.Error)
+			return derp.Wrap(err, location, "Setting task failure", result.Error)
 		}
-
-		// Task failed successfully
-		return true, nil
 
 	// Unrecognised statuses are the same as "Ignored": this consumer did not
 	// handle the task, so the caller should try the next consumer.
 	default:
-		return false, nil
+		return derp.Internal(location, "Unrecognized result status", result.Status)
 	}
+
+	// Processed "successfully" (though the task may have errored)
+	return nil
+}
+
+// dispatch offers a Task to each consumer in turn and returns the first result
+// that isn't "ignored".  It returns ok=false when no consumer recognized the task.
+func (q *Queue) dispatch(task Task) (Result, bool) {
+
+	// This is the single home of the consumer-dispatch rule, shared by the
+	// pooled workers (consume) and the inline runner (runInline) — only their
+	// result POLICIES differ.
+
+	const location = "queue.dispatch"
+
+	for _, consumeFunc := range q.consumers {
+
+		// Try to run the Task.
+		// Any recognized statuses mean this consumer handled the task.
+		// Return with the result data.
+		switch result := consumeFunc(task.Name, task.Arguments); result.Status {
+
+		case ResultStatusSuccess,
+			ResultStatusRequeue,
+			ResultStatusError,
+			ResultStatusFailure:
+
+			log.Trace().
+				Str("location", location).
+				Str("name", task.Name).
+				Str("status", result.Status).
+				Msg("Task executed")
+
+			return result, true
+
+		// Ignored status means THIS consumer did not match the task.
+		case ResultStatusIgnored:
+			continue
+
+		// Unrecognized statuses are bad bad bad. Return an immediate Failure.
+		default:
+			return Failure(derp.Internal(location, "Unrecognized result status", result.Status)), true
+		}
+	}
+
+	// Fall-through means that NO consumer was found that matches the task.
+	return Result{}, false
 }
 
 // requeueTask resets a successful task's identity and run counters, then

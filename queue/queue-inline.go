@@ -1,0 +1,53 @@
+package queue
+
+import (
+	"github.com/benpate/derp"
+	"github.com/rs/zerolog/log"
+)
+
+// runInline executes a single Inline task in its own one-shot goroutine.
+// Consumer dispatch is shared with the pooled workers (see dispatch); only the
+// result POLICY differs.  Inline tasks bypass the buffer and the storage
+// provider, so they run at-most-once: consume's requeue/retry machinery
+// (which writes to storage) must never run for them — any non-success result
+// is reported and dropped instead.  The caller (Publish) has already added
+// this goroutine to q.workers, so Stop() waits for in-flight inline tasks.
+func (q *Queue) runInline(task Task) {
+
+	const location = "queue.runInline"
+
+	defer q.workers.Done()
+
+	// RULE: a panic in a detached goroutine would crash the whole process.
+	// Give inline tasks the same isolation a pooled worker enjoys: report it
+	// and move on.
+	defer func() {
+		if r := recover(); r != nil {
+			derp.Report(derp.Internal(location, "Panic in inline task", task.Name, r))
+		}
+	}()
+
+	result, ok := q.dispatch(task)
+
+	if !ok {
+		derp.Report(derp.Internal(location, "No consumers available to process inline task", task.Name))
+		return
+	}
+
+	switch result.Status {
+
+	// Success: nothing to clean up — the task was never stored.
+	case ResultStatusSuccess:
+		log.Trace().Str("location", location).Str("name", task.Name).Msg("Inline task succeeded")
+
+	// At-most-once: a Requeue would re-enter Publish and loop the inline task
+	// forever.  Report the misuse and drop the task.
+	case ResultStatusRequeue:
+		derp.Report(derp.Internal(location, "Inline tasks cannot requeue (at-most-once)", task.Name))
+
+	// At-most-once: errors and failures are reported and dropped.  Retrying
+	// would require storage, which Inline tasks must never touch.
+	case ResultStatusError, ResultStatusFailure:
+		derp.Report(derp.Wrap(result.Error, location, "Inline task did not complete (at-most-once: not retried)", task.Name))
+	}
+}

@@ -153,6 +153,22 @@ func (q *Queue) Publish(task Task) error {
 		return nil
 	}
 
+	// Inline tasks bypass the queue machinery entirely: no buffer, no storage.
+	// Each one runs at-most-once in its own goroutine, tracked in q.workers so
+	// that Stop() drains in-flight inline tasks before returning.
+	if task.Inline {
+
+		// RULE: Signature dedup requires a stored record to check against; an
+		// Inline task is never stored, so the two options cannot combine.
+		if task.Signature != "" {
+			return derp.Internal(location, "Inline tasks cannot have a Signature", task.Name)
+		}
+
+		q.workers.Add(1)
+		go q.runInline(task)
+		return nil
+	}
+
 	// RULE: Update task.Priority if unset
 	if task.Priority == -1 {
 		task.Priority = q.defaultPriority

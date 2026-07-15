@@ -12,6 +12,20 @@ func WithPriority(priority int) TaskOption {
 	}
 }
 
+// WithInline marks this task to run "inline": Publish launches it at-most-once
+// in its own one-shot goroutine, skipping the worker buffer and the storage
+// provider entirely.  Inline tasks are never persisted, never retried, and
+// never requeued — any non-success result is reported and dropped.  Use this
+// for short-lived, volatile, process-local work (e.g. realtime nudges) where
+// a stored or cross-process run would be meaningless.  There is no concurrency
+// limit, so keep inline tasks fast.  Incompatible with WithSignature (nothing
+// is stored to dedupe against).
+func WithInline() TaskOption {
+	return func(t *Task) {
+		t.Inline = true
+	}
+}
+
 // WithAsyncDelay sets a number of milliseconds to wait
 // before publishing this task onto the queue. If this value is non-zero
 // then a new goroutine will be launched that will sleep, then re-publish
