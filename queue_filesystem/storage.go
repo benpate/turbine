@@ -47,7 +47,9 @@ func (storage Storage) SaveTask(task queue.Task) error {
 		return derp.Wrap(err, location, "Unable to marshal task")
 	}
 
-	if err = os.WriteFile(filename, data, 0644); err != nil {
+	// RULE: 0600 — task arguments can carry sensitive data (IDs, hostnames,
+	// application payloads), so spool files must not be world-readable.
+	if err = os.WriteFile(filename, data, 0600); err != nil {
 		return derp.Wrap(err, location, "Unable to write task file", filename)
 	}
 
@@ -73,6 +75,12 @@ func (storage Storage) DeleteTask(taskID string) error {
 	// If the taskID is empty, then this is an in-memory task, so there's nothing to do
 	if taskID == "" {
 		return nil
+	}
+
+	// RULE: TaskIDs are self-generated ObjectID hex (see SaveTask).  Validating here
+	// makes it impossible for a malformed ID to build a path outside the storage directory.
+	if _, err := primitive.ObjectIDFromHex(taskID); err != nil {
+		return derp.Wrap(err, location, "TaskID must be a valid ObjectID", taskID)
 	}
 
 	// Try to delete the task from the filesystem
@@ -127,7 +135,9 @@ func (storage Storage) GetTasks() ([]queue.Task, error) {
 		// Use the full path for both reading and removing, so they cannot diverge
 		path := storage.directory + "/" + filename
 
-		// Read the first file in the directory
+		// Read the first file in the directory.
+		// #nosec G304 -- path is storage.directory + a name returned by ReadDir
+		// of that same directory (filtered to .json); it never contains external input.
 		file, err := os.ReadFile(path)
 
 		if err != nil {

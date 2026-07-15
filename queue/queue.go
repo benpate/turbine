@@ -107,15 +107,20 @@ func (q *Queue) start() {
 			time.Sleep(1 * time.Minute)
 		}
 
-		// Loop through all tasks that we have to process
+		// Loop through all tasks that we have to process.
+		// Select on q.done as well as the buffer send: a bare send would leave
+		// this poller blocked forever if Stop fires while the buffer is full
+		// (the workers that drain it exit on done).  Same idiom as onTaskError.
 		for _, task := range tasks {
 
-			if channel.Closed(q.done) {
+			select {
+
+			case q.buffer <- task:
+
+			case <-q.done:
 				log.Trace().Msg("Turbine Queue: done channel closed. Exiting.")
 				return
 			}
-
-			q.buffer <- task
 		}
 	}
 }
