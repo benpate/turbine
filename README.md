@@ -98,6 +98,23 @@ if err := q.Delete("daily-report"); err != nil {
 }
 ```
 
+## Inline Tasks
+
+Use `WithInline` for short-lived, volatile, process-local work (such as realtime
+notifications) where a stored or cross-process run would be meaningless.  An inline
+task runs at-most-once in its own goroutine the moment it is published — it is never
+buffered, never written to storage, and never retried or requeued.  A failed inline
+task is reported and dropped.  Inline tasks cannot have a `Signature` (there is no
+stored record to de-duplicate against).
+
+```go
+task := queue.NewTask("RealtimeNudge", args, queue.WithInline())
+
+if err := q.Publish(task); err != nil {
+    // only errors related to validating the task
+}
+```
+
 ## Mongo Storage Provider
 
 Turbine is built to support pluggable storage providers, so that any datastore can be used to manage queued tasks.

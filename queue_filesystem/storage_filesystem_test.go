@@ -6,6 +6,7 @@ import (
 
 	"github.com/benpate/turbine/queue"
 	"github.com/stretchr/testify/require"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 func TestNew(t *testing.T) {
@@ -122,7 +123,10 @@ func TestDeleteTask_EmptyID(t *testing.T) {
 
 func TestDeleteTask_Missing(t *testing.T) {
 	storage := New(t.TempDir())
-	require.Error(t, storage.DeleteTask("does-not-exist"))
+
+	// A well-formed TaskID that has no file behind it: passes the ObjectID
+	// guard, then fails at os.Remove (the path this test exists to cover).
+	require.Error(t, storage.DeleteTask(primitive.NewObjectID().Hex()))
 }
 
 func TestDeleteTaskBySignature_NotImplemented(t *testing.T) {
