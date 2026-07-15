@@ -195,10 +195,13 @@ func (storage Storage) GetTasks() ([]queue.Task, error) {
 		"lockId": lockID,
 	}
 
-	// Sort by startDate, and limit to the number of workers
+	// Sort by priority first (matching pickTasks), then startDate, so every
+	// priority=1 task in the locked batch is dispatched before any priority=2.
+	// NOTE: lockTasks stamps the whole batch with startDate=now, so startDate
+	// is only a tiebreaker here.
 	options := options.Find().SetSort(bson.D{
-		{Key: "startDate", Value: 1},
 		{Key: "priority", Value: 1},
+		{Key: "startDate", Value: 1},
 	})
 
 	// Query the database
