@@ -3,7 +3,7 @@ module github.com/benpate/turbine
 go 1.25.0
 
 require (
-	github.com/benpate/derp v0.36.0
+	github.com/benpate/derp v0.37.0
 	github.com/benpate/rosetta v0.33.0
 	github.com/rs/zerolog v1.35.1
 	github.com/stretchr/testify v1.11.1
