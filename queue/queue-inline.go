@@ -5,17 +5,18 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// runInline executes a single Inline task in its own one-shot goroutine.
-// Consumer dispatch is shared with the pooled workers (see dispatch); only the
-// result POLICY differs.  Inline tasks bypass the buffer and the storage
-// provider, so they run at-most-once: consume's requeue/retry machinery
-// (which writes to storage) must never run for them — any non-success result
-// is reported and dropped instead.  The caller (Publish) has already added
-// this goroutine to q.workers, so Stop() waits for in-flight inline tasks.
+// runInline executes a single Inline task in its own one-shot goroutine
 func (q *Queue) runInline(task Task) {
 
 	const location = "queue.runInline"
 
+	// Inline tasks bypass the buffer and the storage provider, so they run
+	// at-most-once: consume's requeue/retry machinery (which writes to storage)
+	// must never run for them.  Consumer dispatch is still shared with the
+	// pooled workers (see dispatch); only the result POLICY below differs.
+
+	// Signal the WaitGroup on exit.  Publish added this goroutine to q.workers,
+	// so Stop waits for in-flight inline tasks before returning.
 	defer q.workers.Done()
 
 	// RULE: a panic in a detached goroutine would crash the whole process.

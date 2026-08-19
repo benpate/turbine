@@ -7,10 +7,8 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// startWorker runs a single, long-lived worker process, pulling Tasks off
-// the buffered channel and running them one at a time. It blocks waiting for
-// new work for the entire lifecycle of the Queue, and only exits when Stop
-// closes the done channel.
+// startWorker runs a single, long-lived worker, pulling Tasks off the buffered
+// channel and running them one at a time until Stop closes the done channel.
 func (q *Queue) startWorker() {
 
 	// Signal the WaitGroup when this worker exits, so Stop can return.
@@ -86,8 +84,9 @@ func (q *Queue) consume(task Task) error {
 			return derp.Wrap(err, location, "Setting task failure", result.Error)
 		}
 
-	// Unrecognised statuses are the same as "Ignored": this consumer did not
-	// handle the task, so the caller should try the next consumer.
+	// Unreachable in practice: dispatch already converts an unrecognized status
+	// into a Failure.  Kept as a backstop so a new ResultStatus can never be
+	// silently treated as success.
 	default:
 		return derp.Internal(location, "Unrecognized result status", result.Status)
 	}

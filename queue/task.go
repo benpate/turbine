@@ -6,7 +6,7 @@ import (
 	"github.com/benpate/rosetta/mapof"
 )
 
-// Task wraps a Task with the metadata required to track its runs and retries.
+// Task is a single unit of work, plus the metadata required to track its runs and retries.
 type Task struct {
 	TaskID      string    `bson:"taskId"`              // Unique identifier for this task
 	LockID      string    `bson:"lockId,omitempty"`    // Unique identifier for the worker that is currently processing this task

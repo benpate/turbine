@@ -23,6 +23,7 @@ type Queue struct {
 	preProcessor         PreProcessor   // optional pre-processor function that is executed on all tasks before they are published
 	buffer               chan Task      // buffer is a channel of tasks that are ready to be processed
 	done                 chan struct{}  // done channel is closed to signal all workers to stop
+	stopOnce             sync.Once      // stopOnce guarantees the done channel is closed exactly once, making Stop idempotent
 	workers              sync.WaitGroup // workers tracks the running worker goroutines so Stop can wait for them to exit
 }
 
@@ -35,7 +36,7 @@ func New(options ...Option) *Queue {
 		bufferSize:           32,
 		defaultPriority:      16,
 		runImmediatePriority: 16,
-		defaultRetryMax:      8, // 511 minutes => ~8.5 hours of retries
+		defaultRetryMax:      8, // backoff sums 2^0..2^7 => 255 minutes (~4.25 hours) of retries
 		pollStorage:          true,
 		done:                 make(chan struct{}),
 	}
@@ -189,9 +190,28 @@ func (q *Queue) Publish(task Task) error {
 	// hold up execution if the buffer is full because there's
 	// no storage provider to fall back on.
 	if q.storage == nil {
+
+		// RULE: Once Stop has closed q.done, no workers remain to drain the
+		// buffer, so a bare send would block this caller forever.  Fail fast
+		// instead.  (A storage-backed Task is still worth writing to disk --
+		// another process, or the next restart, will pick it up -- so this
+		// guard belongs only on the memory-only path.)
+		if channel.Closed(q.done) {
+			return derp.Internal(location, "Queue is stopped. Task not published", task.Name)
+		}
+
 		log.Trace().Msg("Turbine Queue: No storage configured. Task added to channel.")
-		q.buffer <- task
-		return nil
+
+		// Select on q.done as well as the send, so a Stop that lands *during*
+		// this call releases the caller too.  Same idiom as start and onTaskError.
+		select {
+
+		case q.buffer <- task:
+			return nil
+
+		case <-q.done:
+			return derp.Internal(location, "Queue is stopped. Task not published", task.Name)
+		}
 	}
 
 	// Special Case #2: If the task is marked for immediate execution, then try to
@@ -253,11 +273,15 @@ func (q *Queue) Delete(signature string) error {
 	return nil
 }
 
-// Stop closes the queue and stops all workers (after they complete their current task)
+// Stop closes the queue and stops all workers (after they complete their current task).
+// Stop is idempotent -- a second call waits for the workers again instead of panicking
+// on a double close, so shutdown can be triggered from more than one place.
 func (q *Queue) Stop() {
 
 	// Send "stop" signal to all workers
-	close(q.done)
+	q.stopOnce.Do(func() {
+		close(q.done)
+	})
 
 	// Wait until all workers have finished their current task and exited
 	q.workers.Wait()

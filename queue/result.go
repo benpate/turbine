@@ -35,7 +35,7 @@ func (result Result) IsSuccessful() bool {
 	return (result.Status == ResultStatusSuccess) || (result.Status == ResultStatusRequeue)
 }
 
-// NotSuccessful returns TRUE if the Result is NOT a "SUCCESS"
+// NotSuccessful returns TRUE if the Result is neither a "SUCCESS" nor a "REQUEUE"
 func (result Result) NotSuccessful() bool {
 	return !result.IsSuccessful()
 }
