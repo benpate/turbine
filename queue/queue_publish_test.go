@@ -182,3 +182,64 @@ func TestAllowImmediate(t *testing.T) {
 	// A task with a signature is never immediate
 	require.False(t, q.allowImmediate(&Task{Priority: 1, Signature: "sig"}))
 }
+
+// TestPublish_AfterStop_NoStorage pins shutdown behavior for a memory-only
+// queue.  Stop leaves no workers to drain the buffer, so a bare send would
+// park the caller forever -- an in-flight request handler publishing during
+// graceful shutdown would never return.  Publish must fail fast instead.
+func TestPublish_AfterStop_NoStorage(t *testing.T) {
+
+	q := New(WithBufferSize(1), WithWorkerCount(0), WithPollStorage(false))
+	q.Start()
+
+	// Fill the one and only buffer slot
+	require.NoError(t, q.Publish(NewTask("first", nil)))
+
+	q.Stop()
+
+	// Publish must return rather than block.  Run it in a goroutine and assert
+	// on the test goroutine, so a regression fails with a clear message instead
+	// of hanging the whole suite.
+	published := make(chan error, 1)
+	go func() {
+		published <- q.Publish(NewTask("second", nil))
+	}()
+
+	select {
+
+	case err := <-published:
+		require.Error(t, err, "publishing to a stopped memory-only queue must report an error")
+
+	case <-time.After(5 * time.Second):
+		t.Fatal("Publish blocked after Stop")
+	}
+}
+
+// TestPublish_AfterStop_WithStorage confirms the stopped-queue guard is scoped
+// to the memory-only path.  With a storage provider the Task is still worth
+// persisting: another process, or the next restart, will pick it up.
+func TestPublish_AfterStop_WithStorage(t *testing.T) {
+
+	storage := &mockStorage{}
+	q := New(WithStorage(storage), WithBufferSize(1), WithWorkerCount(0), WithPollStorage(false))
+	q.Start()
+	q.Stop()
+
+	// Priority above runImmediatePriority routes straight to storage
+	require.NoError(t, q.Publish(NewTask("late", nil, WithPriority(99))))
+	require.Len(t, storage.saved, 1)
+	require.Equal(t, "late", storage.saved[0].Name)
+}
+
+// TestStop_Idempotent pins Stop against a double close of the done channel,
+// which panics.  Shutdown is often triggered from more than one place (a signal
+// handler and an explicit call), so a second Stop must be harmless.
+func TestStop_Idempotent(t *testing.T) {
+
+	q := New(WithWorkerCount(2), WithPollStorage(false))
+	q.Start()
+
+	q.Stop()
+	require.NotPanics(t, q.Stop, "Stop must be safe to call twice")
+	require.NotPanics(t, q.Stop, "...and a third time")
+}

@@ -125,8 +125,10 @@ func TestDeleteTask_Missing(t *testing.T) {
 	storage := New(t.TempDir())
 
 	// A well-formed TaskID that has no file behind it: passes the ObjectID
-	// guard, then fails at os.Remove (the path this test exists to cover).
-	require.Error(t, storage.DeleteTask(primitive.NewObjectID().Hex()))
+	// guard, then finds nothing at os.Remove.  Deleting what is already gone
+	// is success -- matching queue_mongo, whose DeleteOne on a missing
+	// document is likewise not an error.
+	require.NoError(t, storage.DeleteTask(primitive.NewObjectID().Hex()))
 }
 
 func TestDeleteTaskBySignature_NotImplemented(t *testing.T) {

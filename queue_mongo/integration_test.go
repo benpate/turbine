@@ -202,3 +202,67 @@ func TestIntegration_GetTasks_RespectsStartDate(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 0, len(tasks))
 }
+
+// TestIntegration_SignatureRetryWriteback pins the retry path for tasks that
+// carry a Signature.  queue.onTaskError bumps a task's counters and calls
+// SaveTask to write them back; when the duplicate-signature check matched the
+// task's OWN record, that write was silently dropped, so RetryCount never
+// advanced and the task retried forever instead of reaching the failure log.
+func TestIntegration_SignatureRetryWriteback(t *testing.T) {
+
+	storage := testStorage(t, 16, 5)
+
+	task := queue.NewTask("hello", nil, queue.WithSignature("sig-retry"))
+	task.StartDate = time.Now().Add(-time.Minute).Unix()
+	require.NoError(t, storage.SaveTask(task))
+
+	// Lock the task, the way the queue's poller does
+	locked, err := storage.GetTasks()
+	require.NoError(t, err)
+	require.Equal(t, 1, len(locked))
+
+	// Write the task back, exactly as onTaskError does after a failed run
+	retried := locked[0]
+	retried.LockID = ""
+	retried.TimeoutDate = 0
+	retried.RetryCount = 5
+	retried.Error = "boom"
+	require.NoError(t, storage.SaveTask(retried))
+
+	// The updated counters must be on disk, and still in a single record
+	var stored queue.Task
+	require.NoError(t, storage.database.Collection(CollectionQueue).
+		FindOne(context.Background(), bson.M{"signature": "sig-retry"}).Decode(&stored))
+
+	require.Equal(t, 5, stored.RetryCount, "retry counter must persist")
+	require.Equal(t, int64(0), stored.TimeoutDate, "lock must be released")
+	require.Equal(t, "boom", stored.Error)
+
+	count, err := storage.database.Collection(CollectionQueue).
+		CountDocuments(context.Background(), bson.M{"signature": "sig-retry"})
+	require.NoError(t, err)
+	require.Equal(t, int64(1), count, "write-back must update, not duplicate")
+}
+
+// TestIntegration_SignatureStillBlocksOtherTasks confirms the self-exclusion
+// above did not weaken the actual dedup rule: a DIFFERENT task claiming a
+// signature that is already queued is still dropped.
+func TestIntegration_SignatureStillBlocksOtherTasks(t *testing.T) {
+
+	storage := testStorage(t, 16, 5)
+
+	require.NoError(t, storage.SaveTask(queue.NewTask("first", nil, queue.WithSignature("sig-dedup"))))
+
+	// A second, independent task with the same signature is silently dropped
+	require.NoError(t, storage.SaveTask(queue.NewTask("second", nil, queue.WithSignature("sig-dedup"))))
+
+	var stored queue.Task
+	require.NoError(t, storage.database.Collection(CollectionQueue).
+		FindOne(context.Background(), bson.M{"signature": "sig-dedup"}).Decode(&stored))
+	require.Equal(t, "first", stored.Name, "the original task must survive")
+
+	count, err := storage.database.Collection(CollectionQueue).
+		CountDocuments(context.Background(), bson.M{"signature": "sig-dedup"})
+	require.NoError(t, err)
+	require.Equal(t, int64(1), count)
+}
