@@ -2,6 +2,8 @@ package queue_filesystem
 
 import (
 	"encoding/json"
+	"errors"
+	"io/fs"
 	"os"
 	"strings"
 
@@ -27,7 +29,7 @@ func New(directory string) Storage {
 	}
 }
 
-// SaveTask adds/updates a task to the queue
+// SaveTask writes a task to the queue as a new spool file
 func (storage Storage) SaveTask(task queue.Task) error {
 
 	const location = "queue_filesystem.SaveTask"
@@ -86,7 +88,16 @@ func (storage Storage) DeleteTask(taskID string) error {
 	// Try to delete the task from the filesystem
 	filename := storage.directory + "/" + taskID + ".json"
 	if err := os.Remove(filename); err != nil {
-		return derp.ReportAndReturn(derp.Wrap(err, location, "Unable to delete task file", filename))
+
+		// RULE: A missing file is success, not an error.  GetTasks removes each
+		// spool file as it hands the Task to a worker (this backend runs tasks
+		// at-most-once), so the file is already gone by the time the Queue
+		// reports the Task complete and calls DeleteTask.
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil
+		}
+
+		return derp.Wrap(err, location, "Unable to delete task file", filename)
 	}
 
 	// Silence is acquiescence
@@ -103,7 +114,7 @@ func (storage Storage) DeleteTaskBySignature(_ string) error {
 	return derp.NotImplemented("queue_filesystem.DeleteTaskBySignature", "Filesystem storage cannot delete task by signature.")
 }
 
-// LogFailure adds a task to the error log
+// LogFailure reports a failed task.  This backend keeps no persistent error log.
 func (storage Storage) LogFailure(task queue.Task) error {
 
 	const location = "queue_filesystem.LogFailure"
@@ -112,7 +123,7 @@ func (storage Storage) LogFailure(task queue.Task) error {
 	return nil
 }
 
-// GetTasks returns all tasks that are currently locked by this worker
+// GetTasks claims and returns at most one task, removing its spool file
 func (storage Storage) GetTasks() ([]queue.Task, error) {
 
 	const location = "queue_filesystem.GetTasks"
