@@ -42,17 +42,7 @@ func (storage Storage) SaveTask(task queue.Task) error {
 	timeout, cancel := timeoutContext(16)
 	defer cancel()
 
-	// If this is a duplicate task, then do not run it again.
-	if storage.isDuplicateSignature(timeout, task.Signature) {
-		return nil
-	}
-
-	log.Trace().
-		Str("location", location).
-		Str("task", task.Name).
-		Msg("Saving Task...")
-
-		// If the Task does not have a TaskID, then create a new one
+	// If the Task does not have a TaskID, then create a new one
 	if task.TaskID == "" {
 		taskID = primitive.NewObjectID()
 		task.TaskID = taskID.Hex()
@@ -65,6 +55,19 @@ func (storage Storage) SaveTask(task queue.Task) error {
 			return derp.Wrap(err, location, "TaskID must be a valid ObjectID")
 		}
 	}
+
+	// RULE: If ANOTHER task is already queued with this signature, then do not
+	// run this one again.  The identity check must happen first so the Task's
+	// own record can be excluded: SaveTask is also how a retry writes its
+	// updated counters back, and matching itself would silently discard them.
+	if storage.isDuplicateSignature(timeout, task.Signature, taskID) {
+		return nil
+	}
+
+	log.Trace().
+		Str("location", location).
+		Str("task", task.Name).
+		Msg("Saving Task...")
 
 	// Set up filter and option arguments
 	filter := bson.M{"_id": taskID}
@@ -230,7 +233,7 @@ func (storage Storage) lockTasks(timeout context.Context, lockID primitive.Objec
 		return derp.Wrap(err, location, "Unable to pick tasks")
 	}
 
-	// Try to update these tasks IF they available to take
+	// Try to claim these tasks, but only the ones still available to take
 	filter := bson.M{
 		"_id":         bson.M{"$in": tasks},
 		"timeoutDate": bson.M{"$lt": time.Now().Unix()},
@@ -267,7 +270,7 @@ func (storage Storage) pickTasks(timeout context.Context) ([]primitive.ObjectID,
 		"timeoutDate": bson.M{"$lt": startDate},
 	}
 
-	// Sort by startDate, and limit to the number of workers
+	// Sort by priority, then startDate, and take no more than one lock batch
 	options := options.Find().
 		SetSort(bson.D{{Key: "priority", Value: 1}, {Key: "startDate", Value: 1}}).
 		SetLimit(int64(storage.lockQuantity)).
@@ -300,9 +303,11 @@ func (storage Storage) pickTasks(timeout context.Context) ([]primitive.ObjectID,
 	return result, nil
 }
 
-// isDuplicateSignature returns TRUE if the task
-// has a signature that is already in the queue
-func (storage Storage) isDuplicateSignature(timeout context.Context, signature string) bool {
+// isDuplicateSignature returns TRUE if a task OTHER than taskID is already in
+// the queue with this signature.  taskID is excluded so that re-saving a task
+// (for instance, writing back its retry counters) is never mistaken for a
+// duplicate of itself.
+func (storage Storage) isDuplicateSignature(timeout context.Context, signature string, taskID primitive.ObjectID) bool {
 
 	const location = "queue_mongo.isDuplicateSignature"
 
@@ -312,8 +317,11 @@ func (storage Storage) isDuplicateSignature(timeout context.Context, signature s
 
 	var task queue.Task
 
-	// Look for unassigned tasks, or tasks that have timed out
-	filter := bson.M{"signature": signature}
+	// Look for any OTHER task that already claims this signature
+	filter := bson.M{
+		"signature": signature,
+		"_id":       bson.M{"$ne": taskID},
+	}
 	options := options.FindOne().SetProjection(bson.M{"_id": 1})
 
 	// Query the database for matching Tasks
