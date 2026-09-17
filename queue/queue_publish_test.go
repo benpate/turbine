@@ -93,20 +93,6 @@ func TestPublish_PreProcessorModify(t *testing.T) {
 	require.Equal(t, "modified", task.Name)
 }
 
-func TestPublish_AsyncDelay(t *testing.T) {
-
-	q := New()
-
-	// An async task returns immediately and is published from a goroutine.
-	require.NoError(t, q.Publish(NewTask("x", nil, WithAsyncDelay(20))))
-	require.Equal(t, 0, len(q.buffer)) // not published yet
-
-	// Wait for the async goroutine to publish
-	require.Eventually(t, func() bool {
-		return len(q.buffer) == 1
-	}, time.Second, 5*time.Millisecond)
-}
-
 func TestQueue_NewTask(t *testing.T) {
 
 	// NewTask is the error-swallowing convenience wrapper around Publish

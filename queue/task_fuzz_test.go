@@ -57,10 +57,6 @@ func FuzzTaskJSONRoundTrip(f *testing.F) {
 		decoded := Task{}
 		require.NoError(t, json.Unmarshal(data, &decoded))
 
-		// AsyncDelay is excluded from serialization (`bson:"-"` / not persisted),
-		// so it must remain at its zero value after a round trip.
-		require.Equal(t, 0, decoded.AsyncDelay)
-
 		// Every persisted field must survive the round trip exactly.
 		require.Equal(t, original, decoded)
 	})

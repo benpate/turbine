@@ -147,22 +147,17 @@ func (q *Queue) Publish(task Task) error {
 		}
 	}
 
-	// If the task is to be published asynchronously, then hold it in a goroutine
-	if delay := time.Duration(task.AsyncDelay) * time.Millisecond; delay != 0 {
-		go func() {
-			task.AsyncDelay = 0
-			time.Sleep(delay)
-			derp.Report(q.Publish(task))
-		}()
-
-		// Exit this method (no error reporting possible)
-		return nil
-	}
-
 	// Inline tasks bypass the queue machinery entirely: no buffer, no storage.
 	// Each one runs at-most-once in its own goroutine, tracked in q.workers so
 	// that Stop() drains in-flight inline tasks before returning.
 	if task.Inline {
+
+		// RULE: The goroutine below registers with the WaitGroup that Stop is
+		// already waiting on, so once q.done is closed there is nothing to run it.
+		// (Storage-backed Tasks are still written; the next restart picks them up.)
+		if channel.Closed(q.done) {
+			return derp.Internal(location, "Queue is stopped. Task not published", task.Name)
+		}
 
 		// RULE: Signature dedup requires a stored record to check against; an
 		// Inline task is never stored, so the two options cannot combine.

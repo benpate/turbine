@@ -20,7 +20,6 @@ type Task struct {
 	RetryCount  int       `bson:"retryCount"`          // Number of times that this task has already been retried
 	RetryMax    int       `bson:"retryMax"`            // Maximum number of times that this task can be retried
 	Error       string    `bson:"error,omitempty"`     // Error (if any) from the last execution
-	AsyncDelay  int       `bson:"-"`                   // If non-zero, then the `Publish` method will execute in a separate goroutine, and will sleep for this many milliseconds before publishing the Task.
 	Inline      bool      `bson:"-"`                   // If TRUE, then `Publish` runs this task at-most-once in its own goroutine, skipping the buffer and the storage provider entirely.
 }
 
@@ -41,7 +40,6 @@ func NewTask(name string, arguments map[string]any, options ...TaskOption) Task 
 		Priority:    -1, // If unset, this will be overridden by the Queue object
 		RetryMax:    -1, // If unset, this will be overridden by the Queue object
 		RetryCount:  0,
-		AsyncDelay:  0,
 	}
 
 	// Apply functional options

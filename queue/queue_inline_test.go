@@ -188,24 +188,22 @@ func TestInline_SignatureRejected(t *testing.T) {
 	require.Equal(t, int32(0), atomic.LoadInt32(&calls))
 }
 
-func TestInline_ComposesWithAsyncDelay(t *testing.T) {
+// TestInline_AfterStop rejects an Inline publish once the queue is stopped: the
+// goroutine it would need is registered with the WaitGroup that Stop is already
+// waiting on.
+func TestInline_AfterStop(t *testing.T) {
 
 	var calls int32
 
-	q := New(WithConsumers(func(string, map[string]any) Result {
+	q := New(WithWorkerCount(0), WithPollStorage(false), WithConsumers(func(string, map[string]any) Result {
 		atomic.AddInt32(&calls, 1)
 		return Success()
 	}))
-
-	// AsyncDelay re-publishes after the delay; the Inline flag survives the
-	// round trip and the task still runs exactly once.
-	require.NoError(t, q.Publish(NewTask("nudge", nil, WithInline(), WithAsyncDelay(10))))
-
-	// Wait out the async delay before Stop (the delay goroutine is untracked)
-	time.Sleep(50 * time.Millisecond)
+	q.Start()
 	q.Stop()
 
-	require.Equal(t, int32(1), atomic.LoadInt32(&calls))
+	require.Error(t, q.Publish(NewTask("late", nil, WithInline())))
+	require.Equal(t, int32(0), atomic.LoadInt32(&calls))
 }
 
 func TestTaskOption_WithInline(t *testing.T) {
