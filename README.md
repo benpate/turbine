@@ -58,12 +58,20 @@ implementations:
 
 ```go
 type Consumer interface {
+    OnPublish(task *queue.Task) error
     Consume(task queue.Task) queue.Result
     OnSuccess(task queue.Task) error
     OnError(task queue.Task, err error) error
     OnFailure(task queue.Task, err error) error
 }
 ```
+
+`OnPublish` runs for every task on its way onto the queue, whether it was published or
+scheduled, and before the queue fills in its defaults — so an unset `Priority` or `RetryMax` is
+still `-1` there.  It takes a POINTER, because a consumer may change the task; returning an error
+rejects the task and reports that error back to whoever published it.  Every registered consumer
+sees every task, in registration order.  This is the per-consumer replacement for
+`WithPreProcessor`, which still works and still runs first.
 
 `Consume` does the work.  The other three are how the queue tells a consumer what it decided,
 and a consumer with nothing to say on an event returns `nil`.  All four are required on purpose:
