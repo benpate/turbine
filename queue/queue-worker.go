@@ -153,7 +153,7 @@ func (q *Queue) dispatch(task Task) (Consumer, Result, bool) {
 		// Try to run the Task.
 		// Any recognized statuses mean this consumer handled the task.
 		// Return with the result data.
-		switch result := consumer.Consume(task); result.Status {
+		switch result := consumer.Run(task); result.Status {
 
 		case ResultStatusSuccess,
 			ResultStatusRequeue,

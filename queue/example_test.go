@@ -26,8 +26,8 @@ type printConsumer struct{}
 // OnPublish implements the Consumer interface
 func (consumer printConsumer) OnPublish(*Task) error { return nil }
 
-// Consume implements the Consumer interface
-func (consumer printConsumer) Consume(task Task) Result {
+// Run implements the Consumer interface
+func (consumer printConsumer) Run(task Task) Result {
 	fmt.Println("received task:", task.Name)
 	return Success()
 }

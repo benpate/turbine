@@ -10,8 +10,8 @@ type consumerFunc func(Task) Result
 // OnPublish implements the Consumer interface
 func (fn consumerFunc) OnPublish(*Task) error { return nil }
 
-// Consume implements the Consumer interface
-func (fn consumerFunc) Consume(task Task) Result { return fn(task) }
+// Run implements the Consumer interface
+func (fn consumerFunc) Run(task Task) Result { return fn(task) }
 
 // OnSuccess implements the Consumer interface
 func (fn consumerFunc) OnSuccess(Task) error { return nil }

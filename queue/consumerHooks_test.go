@@ -28,9 +28,9 @@ func (consumer recordingConsumer) OnPublish(task *Task) error {
 	return nil
 }
 
-// Consume implements the Consumer interface
-func (consumer recordingConsumer) Consume(task Task) Result {
-	*consumer.events = append(*consumer.events, "Consume")
+// Run implements the Consumer interface
+func (consumer recordingConsumer) Run(task Task) Result {
+	*consumer.events = append(*consumer.events, "Run")
 	*consumer.tasks = append(*consumer.tasks, task)
 	return consumer.result
 }
@@ -70,7 +70,7 @@ func TestConsumerHooks_Success(t *testing.T) {
 	q := New(WithStorage(&mockStorage{}), WithConsumers(consumer))
 
 	require.NoError(t, q.consume(Task{TaskID: "abc", Name: "x"}))
-	require.Equal(t, []string{"Consume", "OnSuccess"}, *events)
+	require.Equal(t, []string{"Run", "OnSuccess"}, *events)
 }
 
 // TestConsumerHooks_Requeue reports a requeue as a success, because THIS run succeeded.  The
@@ -82,7 +82,7 @@ func TestConsumerHooks_Requeue(t *testing.T) {
 	q := New(WithStorage(&mockStorage{}), WithConsumers(consumer))
 
 	require.NoError(t, q.consume(Task{TaskID: "abc", Name: "x", Priority: 99}))
-	require.Equal(t, []string{"Consume", "OnSuccess", "OnPublish"}, *events)
+	require.Equal(t, []string{"Run", "OnSuccess", "OnPublish"}, *events)
 }
 
 // TestConsumerHooks_Error tells the Consumer when its attempt will be tried again
@@ -92,7 +92,7 @@ func TestConsumerHooks_Error(t *testing.T) {
 	q := New(WithStorage(&mockStorage{}), WithConsumers(consumer))
 
 	require.NoError(t, q.consume(Task{TaskID: "abc", Name: "x", RetryCount: 0, RetryMax: 8}))
-	require.Equal(t, []string{"Consume", "OnError"}, *events)
+	require.Equal(t, []string{"Run", "OnError"}, *events)
 }
 
 // TestConsumerHooks_ErrorOnFinalAttempt reports an ABANDONED task as a failure, even though the
@@ -104,7 +104,7 @@ func TestConsumerHooks_ErrorOnFinalAttempt(t *testing.T) {
 	q := New(WithStorage(&mockStorage{}), WithConsumers(consumer))
 
 	require.NoError(t, q.consume(Task{TaskID: "abc", Name: "x", RetryCount: 8, RetryMax: 8}))
-	require.Equal(t, []string{"Consume", "OnFailure"}, *events)
+	require.Equal(t, []string{"Run", "OnFailure"}, *events)
 }
 
 // TestConsumerHooks_Failure tells the Consumer when its task is abandoned outright
@@ -114,7 +114,7 @@ func TestConsumerHooks_Failure(t *testing.T) {
 	q := New(WithStorage(&mockStorage{}), WithConsumers(consumer))
 
 	require.NoError(t, q.consume(Task{TaskID: "abc", Name: "x"}))
-	require.Equal(t, []string{"Consume", "OnFailure"}, *events)
+	require.Equal(t, []string{"Run", "OnFailure"}, *events)
 }
 
 // TestConsumerHooks_OnlyTheConsumerThatHandledIt confirms that a Consumer which ignored the task
@@ -127,8 +127,8 @@ func TestConsumerHooks_OnlyTheConsumerThatHandledIt(t *testing.T) {
 	q := New(WithStorage(&mockStorage{}), WithConsumers(ignorer, handler))
 
 	require.NoError(t, q.consume(Task{TaskID: "abc", Name: "x"}))
-	require.Equal(t, []string{"Consume"}, *ignorerEvents)
-	require.Equal(t, []string{"Consume", "OnSuccess"}, *handlerEvents)
+	require.Equal(t, []string{"Run"}, *ignorerEvents)
+	require.Equal(t, []string{"Run", "OnSuccess"}, *handlerEvents)
 }
 
 // TestConsumerHooks_HookErrorDoesNotChangeTheOutcome confirms that a failing hook is reported
@@ -225,7 +225,7 @@ func TestConsumerHooks_Inline(t *testing.T) {
 		q.workers.Add(1)
 		q.runInline(Task{Name: "x", Inline: true})
 
-		require.Equal(t, []string{"Consume", "OnSuccess"}, *events)
+		require.Equal(t, []string{"Run", "OnSuccess"}, *events)
 	})
 
 	t.Run("error is abandoned, not retried", func(t *testing.T) {
@@ -235,6 +235,6 @@ func TestConsumerHooks_Inline(t *testing.T) {
 		q.workers.Add(1)
 		q.runInline(Task{Name: "x", Inline: true, RetryMax: 8})
 
-		require.Equal(t, []string{"Consume", "OnFailure"}, *events)
+		require.Equal(t, []string{"Run", "OnFailure"}, *events)
 	})
 }

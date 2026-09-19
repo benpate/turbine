@@ -6,7 +6,7 @@ package queue
 // that method, so that a hook which drifts out of shape fails to compile instead of failing
 // silently at run time.
 //
-// Consume and the three outcome hooks receive the Task as it stood when that run began:
+// Run and the three outcome hooks receive the Task as it stood when that run began:
 // `RetryCount` is the number of attempts that have already failed, and `Task.IsFinalAttempt()`
 // reports whether a failure now will abandon it.
 type Consumer interface {
@@ -20,9 +20,9 @@ type Consumer interface {
 	// ones before it did.  This is the per-Consumer replacement for WithPreProcessor.
 	OnPublish(task *Task) error
 
-	// Consume executes a single attempt of a Task.  A Consumer that does not recognize the
+	// Run executes a single attempt of a Task.  A Consumer that does not recognize the
 	// task MUST return Ignored(), so that the queue can offer it to the next Consumer.
-	Consume(task Task) Result
+	Run(task Task) Result
 
 	// OnSuccess is called after an attempt that succeeded, or that requeued itself.
 	OnSuccess(task Task) error
