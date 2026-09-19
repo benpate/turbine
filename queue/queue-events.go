@@ -7,89 +7,120 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// onTaskSucceeded marks a task as completed, and removes it from the queue.
-func (q *Queue) onTaskSucceeded(task Task) error {
+// onTaskSuccess marks a task as completed, removes it from the queue, and tells the
+// Consumer that handled it.
+func (q *Queue) onTaskSuccess(consumer Consumer, task Task) error {
 
-	const location = "queue.onTaskSucceeded"
+	const location = "queue.onTaskSuccess"
 
 	log.Trace().Str("location", location).Str("name", task.Name).Msg("Task success")
 
-	// If there is no storage provider, then there's no stored record to remove.
-	if q.storage == nil {
-		return nil
+	// Remove the task from the queue.  A memory-only Queue has no stored record to remove,
+	// so it reaches the hook below with nothing to do here.
+	if q.storage != nil {
+		if err := q.storage.DeleteTask(task.TaskID); err != nil {
+			return derp.Wrap(err, location, "Unable to remove task from queue")
+		}
 	}
 
-	// Remove the task from the queue
-	if err := q.storage.DeleteTask(task.TaskID); err != nil {
-		return derp.Wrap(err, location, "Unable to remove task from queue")
+	// RULE: The Consumer is told only once the queue has recorded the outcome, so a hook that
+	// reads storage sees the task already gone.  A delete that fails returns above, un-announced.
+	if err := consumer.OnSuccess(task); err != nil {
+		derp.Report(derp.Wrap(err, location, "Error in Consumer lifecycle hook", "OnSuccess", task.Name))
 	}
 
 	// Silence is golden
 	return nil
 }
 
-// onTaskError marks a task as errored and attempts to re-queue it for later.
-// If the task has already been retried too many times, then it will be moved
-// to the error log and removed from the queue.
-func (q *Queue) onTaskError(task Task, err error) error {
+// onTaskError re-queues a failed task for another attempt and tells the Consumer, or hands
+// it to onTaskFailure once its retries are spent.
+func (q *Queue) onTaskError(consumer Consumer, task Task, err error) error {
 
 	const location = "queue.onTaskError"
 	log.Trace().Str("name", task.Name).Str("location", location).Msg("Logging task error")
 
-	// If the task has already been (re)tried too many times, then give up
-	// and move it to the error log
+	// RULE: This guard is the ONLY place the queue decides retry-vs-abandon, and the abandon
+	// path reports OnFailure from onTaskFailure -- so the decision and the announcement can
+	// never disagree.  `consume` used to re-derive this with Task.IsFinalAttempt().
 	if task.RetryCount >= task.RetryMax {
-		return q.onTaskFailure(task, err)
+		return q.onTaskFailure(consumer, task, err)
 	}
 
-	// Update the task data and re-queue it
-	task.LockID = ""
-	task.StartDate = time.Now().Add(backoff(task.RetryCount)).Unix()
-	task.TimeoutDate = 0
-	task.RetryCount++
-	task.Error = derp.Serialize(err)
+	// Build the NEXT attempt as a separate value.  Mutating `task` here would hand the hook
+	// below a Task whose RetryCount already counts this failure, making IsFinalAttempt() answer
+	// for the next run instead of the one that just happened.
+	retry := task
+	retry.LockID = ""
+	retry.StartDate = time.Now().Add(backoff(task.RetryCount)).Unix()
+	retry.TimeoutDate = 0
+	retry.RetryCount = task.RetryCount + 1
+	retry.Error = derp.Serialize(err)
 
-	// If there is no storage provider, then use the buffer to queue the task.
-	// Select on q.done as well, so a worker blocked on a full buffer at shutdown
-	// exits cleanly instead of deadlocking against Stop.
+	// Re-queue it.  With no storage provider it goes back on the buffer -- selecting on q.done
+	// as well, so a worker blocked on a full buffer at shutdown exits cleanly instead of
+	// deadlocking against Stop.
 	if q.storage == nil {
 		log.Trace().Str("location", location).Msg("Storage is nil.  Unable to log error.")
 		select {
-		case q.buffer <- task:
+		case q.buffer <- retry:
 		case <-q.done:
 		}
-		return nil
+	} else if saveErr := q.storage.SaveTask(retry); saveErr != nil {
+		return derp.Wrap(saveErr, location, "Unable to re-queue task")
 	}
 
-	// Otherwise, write the Task back to the storage provider
-	return q.storage.SaveTask(task)
+	// RULE: Announce the retry only once it is safely queued.  A nil Consumer is the panic
+	// path, which has nobody to tell -- see AGENTS.md.
+	if consumer != nil {
+		// `err` inside the if is the hook's own failure.  The `err` passed INTO the hook is still
+		// the Task's -- Go scopes the new name after the declaration, not during it.
+		if err := consumer.OnError(task, err); err != nil {
+			derp.Report(derp.Wrap(err, location, "Error in Consumer lifecycle hook", "OnError", task.Name))
+		}
+	}
+
+	// Silence is golden
+	return nil
 }
 
-// onTaskFailure marks a task as failed and moves it to the error log.
-func (q *Queue) onTaskFailure(task Task, err error) error {
+// onTaskFailure marks a task as failed, moves it to the error log, and tells the Consumer
+// that handled it.
+func (q *Queue) onTaskFailure(consumer Consumer, task Task, err error) error {
 
 	const location = "queue.onTaskFailure"
 	log.Trace().Str("location", location).Str("name", task.Name).Msg("Logging task failure...")
 
-	// Add the error into the Task record
-	task.Error = derp.Message(err)
+	// Record the error on a separate value, so the hook below still sees the attempt as it ran
+	failed := task
+	failed.Error = derp.Message(err)
 
-	// If there is no storage provider, then there's not much we can do...
-	// Just report the error and return
+	// Move the task to the error log and off the queue.  A memory-only Queue has no error log,
+	// so it reports the error here instead -- the Consumer is still told either way.
 	if q.storage == nil {
+
 		log.Trace().Str("location", location).Msg("Storage is nil.  Unable to log failure.")
 		derp.Report(err)
-		return nil
+
+	} else {
+
+		// Not named `err`: that would shadow the failure the hook below reports
+		if logErr := q.storage.LogFailure(failed); logErr != nil {
+			return derp.Wrap(logErr, location, "Unable to add task to error log")
+		}
+
+		if deleteErr := q.storage.DeleteTask(failed.TaskID); deleteErr != nil {
+			return derp.Wrap(deleteErr, location, "Unable to remove task from queue")
+		}
 	}
 
-	// Add the task to the error log
-	if err := q.storage.LogFailure(task); err != nil {
-		return derp.Wrap(err, location, "Unable to add task to error log")
-	}
-
-	// Remove the task from the queue
-	if err := q.storage.DeleteTask(task.TaskID); err != nil {
-		return derp.Wrap(err, location, "Unable to remove task from queue")
+	// RULE: The Consumer is told only once the queue has recorded the outcome, so a hook that
+	// reads storage sees the task already gone.
+	if consumer != nil {
+		// The inner `err` is the hook's own failure, not the Task's -- see onTaskError.
+		if err := consumer.OnFailure(task, err); err != nil {
+			derp.Report(derp.Wrap(err, location, "Error in Consumer lifecycle hook", "OnFailure", task.Name))
+		}
 	}
 
 	// Succeeded in logging the failure, even if the Task itself failed.

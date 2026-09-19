@@ -38,7 +38,9 @@ func (q *Queue) runInline(task Task) {
 	// Success: nothing to clean up — the task was never stored.
 	case ResultStatusSuccess:
 		log.Trace().Str("location", location).Str("name", task.Name).Msg("Inline task succeeded")
-		reportHookError(consumer.OnSuccess(task), "OnSuccess", task.Name)
+		if err := consumer.OnSuccess(task); err != nil {
+			derp.Report(derp.Wrap(err, location, "Error in Consumer lifecycle hook", "OnSuccess", task.Name))
+		}
 
 	// At-most-once: a Requeue would re-enter Publish and loop the inline task
 	// forever.  Report the misuse and drop the task.
@@ -52,6 +54,8 @@ func (q *Queue) runInline(task Task) {
 
 		// RULE: An Inline task is never retried, so a failed one is abandoned here and now --
 		// OnError would promise a second attempt that can never happen.
-		reportHookError(consumer.OnFailure(task, result.Error), "OnFailure", task.Name)
+		if err := consumer.OnFailure(task, result.Error); err != nil {
+			derp.Report(derp.Wrap(err, location, "Error in Consumer lifecycle hook", "OnFailure", task.Name))
+		}
 	}
 }

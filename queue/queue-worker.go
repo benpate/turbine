@@ -47,10 +47,10 @@ func (q *Queue) consumeSafely(task Task) {
 		err := derp.Internal(location, "Panic in task", task.Name, recovered)
 		derp.Report(err)
 
-		// RULE: A panicking Task is routed through the normal error path so that it backs off and
-		// is eventually abandoned.  Left alone, its storage record survives, another worker locks
-		// it once the lease expires, and it panics again forever.
-		if retryErr := q.onTaskError(task, err); retryErr != nil {
+		// RULE: Route a panicking Task through the normal error path so it backs off and is
+		// eventually abandoned, rather than being re-locked and re-panicked forever.  The
+		// Consumer is nil here: the panic unwound out of dispatch, which lost it.
+		if retryErr := q.onTaskError(nil, task, err); retryErr != nil {
 			derp.Report(derp.Wrap(retryErr, location, "Unable to record panicking task", task.Name))
 		}
 	}()
@@ -79,21 +79,17 @@ func (q *Queue) consume(task Task) error {
 	case ResultStatusSuccess:
 
 		log.Trace().Str("location", location).Msg("Task succeeded.")
-		if err := q.onTaskSucceeded(task); err != nil {
+		if err := q.onTaskSuccess(consumer, task); err != nil {
 			return derp.Wrap(err, location, "Setting task success")
 		}
-
-		reportHookError(consumer.OnSuccess(task), "OnSuccess", task.Name)
 
 	// If the task is to be re-queued, then mark it as complete and run it again
 	case ResultStatusRequeue:
 
 		log.Trace().Str("location", location).Msg("Task succeeded. Requeuing.")
-		if err := q.onTaskSucceeded(task); err != nil {
+		if err := q.onTaskSuccess(consumer, task); err != nil {
 			return derp.Wrap(err, location, "Setting task success")
 		}
-
-		reportHookError(consumer.OnSuccess(task), "OnSuccess", task.Name)
 
 		q.requeueTask(task, result.Delay)
 
@@ -103,15 +99,8 @@ func (q *Queue) consume(task Task) error {
 		log.Trace().Str("location", location).Msg("Task error...")
 		derp.Report(result.Error)
 
-		// RULE: An attempt that fails with no retries left ABANDONS the task, so the Consumer is
-		// told the same thing the queue does.  This mirrors the guard inside onTaskError.
-		if task.IsFinalAttempt() {
-			reportHookError(consumer.OnFailure(task, result.Error), "OnFailure", task.Name)
-		} else {
-			reportHookError(consumer.OnError(task, result.Error), "OnError", task.Name)
-		}
-
-		if err := q.onTaskError(task, result.Error); err != nil {
+		// onTaskError decides retry-vs-abandon and tells the Consumer which one it chose.
+		if err := q.onTaskError(consumer, task, result.Error); err != nil {
 			return derp.Wrap(err, location, "Setting task error", result.Error)
 		}
 
@@ -121,9 +110,7 @@ func (q *Queue) consume(task Task) error {
 		log.Trace().Str("location", location).Msg("Task failure...")
 		derp.Report(result.Error)
 
-		reportHookError(consumer.OnFailure(task, result.Error), "OnFailure", task.Name)
-
-		if err := q.onTaskFailure(task, result.Error); err != nil {
+		if err := q.onTaskFailure(consumer, task, result.Error); err != nil {
 			return derp.Wrap(err, location, "Setting task failure", result.Error)
 		}
 
@@ -180,17 +167,6 @@ func (q *Queue) dispatch(task Task) (Consumer, Result, bool) {
 
 	// Fall-through means that NO consumer was found that matches the task.
 	return nil, Result{}, false
-}
-
-// reportHookError reports an error returned by a Consumer's lifecycle hook.  A hook cannot change
-// what the queue has already decided about a Task, so its error is reported and nothing else.
-func reportHookError(err error, hook string, taskName string) {
-
-	if err == nil {
-		return
-	}
-
-	derp.Report(derp.Wrap(err, "queue.consume", "Error in Consumer lifecycle hook", hook, taskName))
 }
 
 // requeueTask resets a successful task's identity and run counters, then

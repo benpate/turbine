@@ -220,7 +220,7 @@ func (q *Queue) Schedule(task Task, delay time.Duration) error {
 	const location = "queue.Schedule"
 
 	if q.storage == nil {
-		return derp.Internal(location, "Must have a storage provider in order to schedule tasks")
+		return derp.Internal(location, "Must have a storage provider to schedule tasks")
 	}
 
 	// RULE: A scheduled Task passes through the same rules as a published one.  Skipping them
@@ -247,7 +247,7 @@ func (q *Queue) Delete(signature string) error {
 
 	// A memory-only queue has no persistent record to delete
 	if q.storage == nil {
-		return derp.Internal(location, "Must have a storage provider in order to delete tasks")
+		return derp.Internal(location, "Must have a storage provider to delete tasks")
 	}
 
 	if err := q.storage.DeleteTaskBySignature(signature); err != nil {
