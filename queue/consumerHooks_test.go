@@ -14,6 +14,18 @@ type recordingConsumer struct {
 	events    *[]string
 	tasks     *[]Task
 	hookError error
+	onPublish func(*Task) error
+}
+
+// OnPublish implements the Consumer interface
+func (consumer recordingConsumer) OnPublish(task *Task) error {
+	*consumer.events = append(*consumer.events, "OnPublish")
+
+	if consumer.onPublish != nil {
+		return consumer.onPublish(task)
+	}
+
+	return nil
 }
 
 // Consume implements the Consumer interface
@@ -61,14 +73,16 @@ func TestConsumerHooks_Success(t *testing.T) {
 	require.Equal(t, []string{"Consume", "OnSuccess"}, *events)
 }
 
-// TestConsumerHooks_Requeue reports a requeue as a success, because THIS run succeeded
+// TestConsumerHooks_Requeue reports a requeue as a success, because THIS run succeeded.  The
+// trailing OnPublish is not noise: requeueTask re-enters Publish with a fresh identity, so the
+// copy that runs next is a new publish and earns a new pass through the publish-time rules.
 func TestConsumerHooks_Requeue(t *testing.T) {
 
 	consumer, events, _ := newRecordingConsumer(Requeue(0))
 	q := New(WithStorage(&mockStorage{}), WithConsumers(consumer))
 
 	require.NoError(t, q.consume(Task{TaskID: "abc", Name: "x", Priority: 99}))
-	require.Equal(t, []string{"Consume", "OnSuccess"}, *events)
+	require.Equal(t, []string{"Consume", "OnSuccess", "OnPublish"}, *events)
 }
 
 // TestConsumerHooks_Error tells the Consumer when its attempt will be tried again

@@ -23,6 +23,9 @@ func ExampleNewTask() {
 // implements all four methods; one with nothing to say on an event returns nil.
 type printConsumer struct{}
 
+// OnPublish implements the Consumer interface
+func (consumer printConsumer) OnPublish(*Task) error { return nil }
+
 // Consume implements the Consumer interface
 func (consumer printConsumer) Consume(task Task) Result {
 	fmt.Println("received task:", task.Name)

@@ -140,11 +140,9 @@ func (q *Queue) Publish(task Task) error {
 
 	const location = "queue.Queue.Publish"
 
-	// Run the pre-processor on the task (if present)
-	if q.preProcessor != nil {
-		if err := q.preProcessor(&task); err != nil {
-			return derp.Wrap(err, location, "Invalid task. Rejected by PreProcessor", task)
-		}
+	// Apply the rules that every published Task passes through
+	if err := q.prepareTask(&task); err != nil {
+		return derp.Wrap(err, location, "Task rejected", task.Name)
 	}
 
 	// Inline tasks bypass the queue machinery entirely: no buffer, no storage.
@@ -168,16 +166,6 @@ func (q *Queue) Publish(task Task) error {
 		q.workers.Add(1)
 		go q.runInline(task)
 		return nil
-	}
-
-	// RULE: Update task.Priority if unset
-	if task.Priority == -1 {
-		task.Priority = q.defaultPriority
-	}
-
-	// RULE: Update task.RetryMax if unset
-	if task.RetryMax == -1 {
-		task.RetryMax = q.defaultRetryMax
 	}
 
 	// Special Case #1: If there is no storage provider,
@@ -242,6 +230,13 @@ func (q *Queue) Schedule(task Task, delay time.Duration) error {
 		return derp.Internal(location, "Must have a storage provider in order to schedule tasks")
 	}
 
+	// RULE: A scheduled Task passes through the same rules as a published one.  Skipping them
+	// stored the "unset" sentinels verbatim, and a RetryMax of -1 abandons the Task on its very
+	// first failure.
+	if err := q.prepareTask(&task); err != nil {
+		return derp.Wrap(err, location, "Task rejected", task.Name)
+	}
+
 	// Set the task delay time
 	task.Delay(delay)
 
@@ -280,6 +275,42 @@ func (q *Queue) Stop() {
 
 	// Wait until all workers have finished their current task and exited
 	q.workers.Wait()
+}
+
+// prepareTask applies every rule a Task passes through on its way onto the Queue: the
+// PreProcessor, each Consumer's OnPublish, and finally the Queue's defaults for any value still
+// unset.  Publish and Schedule both route through here, so a Task can never reach storage
+// carrying the "unset" sentinels that NewTask writes.
+func (q *Queue) prepareTask(task *Task) error {
+
+	const location = "queue.Queue.prepareTask"
+
+	// Run the pre-processor on the task (if present)
+	if q.preProcessor != nil {
+		if err := q.preProcessor(task); err != nil {
+			return derp.Wrap(err, location, "Invalid task. Rejected by PreProcessor", task.Name)
+		}
+	}
+
+	// Offer the Task to every Consumer, each of which may modify it or refuse it outright.
+	// They run in registration order, so each one sees what the ones before it did.
+	for _, consumer := range q.consumers {
+		if err := consumer.OnPublish(task); err != nil {
+			return derp.Wrap(err, location, "Invalid task. Rejected by Consumer", task.Name)
+		}
+	}
+
+	// RULE: The defaults run LAST, so they only fill values that nothing above chose.  They also
+	// run after the hooks so that a hook still sees -1 and can tell "unset" from "set to 16".
+	if task.Priority == -1 {
+		task.Priority = q.defaultPriority
+	}
+
+	if task.RetryMax == -1 {
+		task.RetryMax = q.defaultRetryMax
+	}
+
+	return nil
 }
 
 // allowImmediate returns TRUE if the Task can be executed immediately

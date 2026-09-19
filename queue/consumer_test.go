@@ -7,6 +7,9 @@ package queue
 // the required-method interface exists to prevent.
 type consumerFunc func(Task) Result
 
+// OnPublish implements the Consumer interface
+func (fn consumerFunc) OnPublish(*Task) error { return nil }
+
 // Consume implements the Consumer interface
 func (fn consumerFunc) Consume(task Task) Result { return fn(task) }
 
