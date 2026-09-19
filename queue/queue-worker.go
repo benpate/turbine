@@ -24,10 +24,39 @@ func (q *Queue) startWorker() {
 			return
 
 		case task := <-q.buffer:
-			if err := q.consume(task); err != nil {
-				derp.Report(err)
-			}
+			q.consumeSafely(task)
 		}
+	}
+}
+
+// consumeSafely executes a single Task and contains any panic it raises.
+func (q *Queue) consumeSafely(task Task) {
+
+	const location = "queue.consumeSafely"
+
+	// RULE: A panic in a Consumer would otherwise unwind out of this worker goroutine and take
+	// the whole process down, losing every other in-flight Task with it.
+	defer func() {
+
+		recovered := recover()
+
+		if recovered == nil {
+			return
+		}
+
+		err := derp.Internal(location, "Panic in task", task.Name, recovered)
+		derp.Report(err)
+
+		// RULE: A panicking Task is routed through the normal error path so that it backs off and
+		// is eventually abandoned.  Left alone, its storage record survives, another worker locks
+		// it once the lease expires, and it panics again forever.
+		if retryErr := q.onTaskError(task, err); retryErr != nil {
+			derp.Report(derp.Wrap(retryErr, location, "Unable to record panicking task", task.Name))
+		}
+	}()
+
+	if err := q.consume(task); err != nil {
+		derp.Report(err)
 	}
 }
 
