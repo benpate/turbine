@@ -184,7 +184,9 @@ func (storage Storage) GetTasks() ([]queue.Task, error) {
 	timeout, cancel := timeoutContext(16)
 	defer cancel()
 
-	result := make([]queue.Task, 0)
+	// Capacity is known: lockTasks claims at most lockQuantity rows, so the cursor below never
+	// grows this slice.  Growing it copies 144-byte Tasks on every doubling.
+	result := make([]queue.Task, 0, storage.lockQuantity)
 	lockID := primitive.NewObjectID()
 
 	// Try to lock more tasks if we don't already have any
@@ -283,10 +285,10 @@ func (storage Storage) pickTasks(timeout context.Context) ([]primitive.ObjectID,
 		return nil, derp.Wrap(err, location, "Unable to find tasks")
 	}
 
-	// Decode the response into a slice
+	// Decode the response into a slice, sized to the SetLimit above
 	temp := make([]struct {
 		ID primitive.ObjectID `bson:"_id"`
-	}, 0)
+	}, 0, storage.lockQuantity)
 
 	if err := cursor.All(timeout, &temp); err != nil {
 		return nil, derp.Wrap(err, location, "Unable to decode tasks")
