@@ -12,41 +12,32 @@ func WithPriority(priority int) TaskOption {
 	}
 }
 
-// WithInline marks this task to run "inline": Publish launches it at-most-once
-// in its own one-shot goroutine, skipping the worker buffer and the storage
-// provider entirely.  Inline tasks are never persisted, never retried, and
-// never requeued — any non-success result is reported and dropped.  Use this
-// for short-lived, volatile, process-local work (e.g. realtime nudges) where
-// a stored or cross-process run would be meaningless.  There is no concurrency
-// limit, so keep inline tasks fast.  Incompatible with WithSignature (nothing
-// is stored to dedupe against).
+// WithInline runs this task at-most-once in its own goroutine, skipping the buffer and the
+// storage provider.  Inline tasks are never persisted, retried, or requeued.
 func WithInline() TaskOption {
 	return func(t *Task) {
 		t.Inline = true
 	}
 }
 
-// WithDelaySeconds sets the number of seconds before the task is executed
-// relative to the current clock. This differs from WithStartTime, which
-// sets an absolute start time.
+// WithDelaySeconds delays the task by N seconds from now.  Use WithStartTime for an
+// absolute start time.
 func WithDelaySeconds(delaySeconds int) TaskOption {
 	return func(task *Task) {
 		task.Delay(time.Duration(delaySeconds) * time.Second)
 	}
 }
 
-// WithDelayMinutes sets the number of minutes before the task is executed
-// relative to the current clock. This differs from WithStartTime, which
-// sets an absolute start time.
+// WithDelayMinutes delays the task by N minutes from now.  Use WithStartTime for an
+// absolute start time.
 func WithDelayMinutes(delayMinutes int) TaskOption {
 	return func(task *Task) {
 		task.Delay(time.Duration(delayMinutes) * time.Minute)
 	}
 }
 
-// WithDelayHours sets the number of hours before the task is executed
-// relative to the current clock. This differs from WithStartTime, which
-// sets an absolute start time.
+// WithDelayHours delays the task by N hours from now.  Use WithStartTime for an
+// absolute start time.
 func WithDelayHours(delayHours int) TaskOption {
 	return func(task *Task) {
 		task.Delay(time.Duration(delayHours) * time.Hour)
@@ -60,18 +51,16 @@ func WithRetryMax(retryMax int) TaskOption {
 	}
 }
 
-// WithSignature sets the signature of the task.
-// Only one task with a given signature can be active at a time.
-// Duplicates are dropped silently.
+// WithSignature sets the task's signature.  Only one task per signature may be active at a
+// time, and duplicates are dropped silently.
 func WithSignature(signature string) TaskOption {
 	return func(t *Task) {
 		t.Signature = signature
 	}
 }
 
-// WithStartTime sets the absolute start time of the task
-// This differs from WithDelayXXX options, which set a start time
-// relative to the current clock.
+// WithStartTime sets an absolute start time for the task.  Use the WithDelayXXX options for
+// a time relative to the current clock.
 func WithStartTime(timestamp time.Time) TaskOption {
 	return func(t *Task) {
 		t.StartDate = timestamp.Unix()

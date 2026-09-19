@@ -58,9 +58,7 @@ func (task *Task) Delay(delay time.Duration) {
 // IsFinalAttempt returns TRUE if a failure on this run will abandon the Task.
 func (task Task) IsFinalAttempt() bool {
 
-	// RULE: This is `>= RetryMax`, not `>= RetryMax-1`.  RetryCount counts the attempts that have
-	// already FAILED, so the run where RetryCount equals RetryMax is the one that gets abandoned --
-	// the same comparison onTaskError makes.  Off by one here reports "giving up" a whole attempt
-	// early, and then runs again anyway.
+	// RULE: `>= RetryMax`, never `RetryMax-1`.  RetryCount counts attempts that have already
+	// FAILED, so this is the same comparison onTaskError makes -- see AGENTS.md.
 	return task.RetryCount >= task.RetryMax
 }

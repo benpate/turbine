@@ -1,8 +1,7 @@
 package queue
 
-// mockStorage is an in-memory Storage implementation used to test the Queue
-// without a real database. It records every call so tests can assert on them,
-// and exposes error fields so failure paths can be exercised.
+// mockStorage is an in-memory Storage implementation for testing.  It records every call, and
+// its error fields let a test exercise the failure paths.
 type mockStorage struct {
 	tasks        []Task
 	saved        []Task

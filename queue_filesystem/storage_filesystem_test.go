@@ -21,7 +21,7 @@ func TestSaveTask(t *testing.T) {
 
 	require.NoError(t, storage.SaveTask(queue.NewTask("myTask", map[string]any{"k": "v"})))
 
-	// Exactly one JSON file was written
+	// A single JSON file was written
 	files, err := os.ReadDir(dir)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(files))
@@ -124,10 +124,9 @@ func TestDeleteTask_EmptyID(t *testing.T) {
 func TestDeleteTask_Missing(t *testing.T) {
 	storage := New(t.TempDir())
 
-	// A well-formed TaskID that has no file behind it: passes the ObjectID
-	// guard, then finds nothing at os.Remove.  Deleting what is already gone
-	// is success -- matching queue_mongo, whose DeleteOne on a missing
-	// document is likewise not an error.
+	// A well-formed TaskID with no file behind it passes the ObjectID guard, then finds nothing
+	// at os.Remove.  Deleting what is already gone is success -- matching queue_mongo, whose
+	// DeleteOne on a missing document is likewise not an error.
 	require.NoError(t, storage.DeleteTask(primitive.NewObjectID().Hex()))
 }
 

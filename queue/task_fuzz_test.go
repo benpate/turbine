@@ -9,16 +9,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// FuzzTaskJSONRoundTrip confirms that any Task survives a JSON marshal/unmarshal
-// cycle unchanged. The filesystem storage provider persists tasks as JSON, so a
-// task pulled back off disk must be identical to the one that was saved.
-//
-// The fuzzer drives the four free-text string fields (the realistic source of
-// serialization surprises: quotes, control bytes, unicode) plus one numeric and
-// one timestamp field. The remaining numeric fields are pinned to representative
-// values around them, keeping the closure within a sane parameter count while
-// still asserting whole-struct equality.
+// FuzzTaskJSONRoundTrip confirms that any Task survives a JSON marshal/unmarshal cycle
+// unchanged, because queue_filesystem persists tasks as JSON
 func FuzzTaskJSONRoundTrip(f *testing.F) {
+
+	// The fuzzer drives the four free-text strings (quotes, control bytes, unicode) plus one
+	// numeric and one timestamp field.  The rest are pinned to representative values, keeping
+	// the closure to a sane parameter count while still asserting whole-struct equality.
 
 	// Seed with representative field values: typical, empty, and negative cases.
 	f.Add("taskId", "name", "signature", "errorText", 16, int64(200))
@@ -27,9 +24,9 @@ func FuzzTaskJSONRoundTrip(f *testing.F) {
 
 	f.Fuzz(func(t *testing.T, taskID, name, signature, errorText string, priority int, startDate int64) {
 
-		// Skip inputs containing invalid UTF-8. encoding/json replaces invalid
-		// byte sequences with U+FFFD on marshal, so the round trip is only exact
-		// for valid UTF-8 -- which is what every realistic task field contains.
+		// Skip inputs containing invalid UTF-8. encoding/json replaces invalid byte
+		// sequences with U+FFFD on marshal, so only valid UTF-8 survives unchanged --
+		// which is what every realistic task field contains.
 		if !utf8.ValidString(taskID) || !utf8.ValidString(name) || !utf8.ValidString(signature) || !utf8.ValidString(errorText) {
 			t.Skip()
 		}
@@ -57,15 +54,16 @@ func FuzzTaskJSONRoundTrip(f *testing.F) {
 		decoded := Task{}
 		require.NoError(t, json.Unmarshal(data, &decoded))
 
-		// Every persisted field must survive the round trip exactly.
+		// Every persisted field must survive the round trip unchanged.
 		require.Equal(t, original, decoded)
 	})
 }
 
-// FuzzTaskArgumentsRoundTrip confirms that a Task's Arguments map survives a JSON
-// round trip. Arguments are caller-supplied data of arbitrary shape, so they are
-// the most likely field to drift during serialization.
+// FuzzTaskArgumentsRoundTrip confirms that a Task's Arguments map survives a JSON round trip
 func FuzzTaskArgumentsRoundTrip(f *testing.F) {
+
+	// Arguments are caller-supplied data of arbitrary shape, so they are the field most likely
+	// to drift during serialization.
 
 	f.Add("key", "value")
 	f.Add("", "")

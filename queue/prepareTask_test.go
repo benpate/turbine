@@ -148,11 +148,12 @@ func TestOnPublish_EveryConsumerInOrder(t *testing.T) {
 	require.Equal(t, []string{"first", "second:100"}, order)
 }
 
-// TestPrepareTask_ScheduleAppliesDefaults is the regression test for a Task that reached storage
-// carrying NewTask's "unset" sentinels.  A RetryMax of -1 makes onTaskError compute `0 >= -1`,
-// which abandoned the Task on its very first failure; a Priority of -1 sorted it ahead of
-// everything else, because lower numbers run first.
+// TestPrepareTask_ScheduleAppliesDefaults is the regression test for a Task that reached
+// storage carrying NewTask's "unset" sentinels
 func TestPrepareTask_ScheduleAppliesDefaults(t *testing.T) {
+
+	// A RetryMax of -1 makes onTaskError compute `0 >= -1` and abandon the Task on its very
+	// first failure; a Priority of -1 sorts it ahead of everything, because lower runs first.
 
 	storage := &mockStorage{}
 	q := New(WithStorage(storage))

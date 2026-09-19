@@ -2,9 +2,8 @@ package queue
 
 import "fmt"
 
-// ExampleNewTask shows how to construct a Task with functional options.
-// Priority and RetryMax default to -1 ("unset") and are replaced by the
-// queue's defaults when the task is published.
+// ExampleNewTask shows how to construct a Task with functional options.  Priority and RetryMax
+// default to -1 ("unset") until the queue fills them in at publish time.
 func ExampleNewTask() {
 
 	task := NewTask("SendEmail", map[string]any{"to": "user@example.com"}, WithPriority(8))
@@ -41,10 +40,8 @@ func (consumer printConsumer) OnError(Task, error) error { return nil }
 // OnFailure implements the Consumer interface
 func (consumer printConsumer) OnFailure(Task, error) error { return nil }
 
-// ExampleQueue_Publish runs a task end-to-end on a memory-only queue.  The
-// task is marked WithInline, so Publish executes it at-most-once in its own
-// goroutine — no storage provider and no Start() worker pool are needed —
-// and Stop() waits for it to finish.
+// ExampleQueue_Publish runs a task end-to-end on a memory-only queue, using WithInline so that
+// neither a storage provider nor a Start() worker pool is needed.
 func ExampleQueue_Publish() {
 
 	q := New(WithConsumers(printConsumer{}))

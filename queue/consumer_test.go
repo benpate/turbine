@@ -1,10 +1,7 @@
 package queue
 
-// consumerFunc adapts a plain function into a Consumer, so that a test can declare one inline.
-//
-// RULE: This is test-only on purpose.  Exported as an embeddable base, it would let a real
-// Consumer whose hook name or signature drifted fall through to a silent no-op -- exactly what
-// the required-method interface exists to prevent.
+// consumerFunc adapts a plain function into a Consumer, so a test can declare one inline.
+// It stays unexported on purpose -- see AGENTS.md.
 type consumerFunc func(Task) Result
 
 // OnPublish implements the Consumer interface

@@ -1,4 +1,3 @@
-// Package queue provides a task queue with support for persistent storage and concurrent processing
 package queue
 
 import (
@@ -23,7 +22,7 @@ type Queue struct {
 	preProcessor         PreProcessor   // optional pre-processor function that is executed on all tasks before they are published
 	buffer               chan Task      // buffer is a channel of tasks that are ready to be processed
 	done                 chan struct{}  // done channel is closed to signal all workers to stop
-	stopOnce             sync.Once      // stopOnce guarantees the done channel is closed exactly once, making Stop idempotent
+	stopOnce             sync.Once      // stopOnce guarantees the done channel is closed only once, making Stop idempotent
 	workers              sync.WaitGroup // workers tracks the running worker goroutines so Stop can wait for them to exit
 }
 
@@ -108,10 +107,8 @@ func (q *Queue) start() {
 			time.Sleep(1 * time.Minute)
 		}
 
-		// Loop through all tasks that we have to process.
-		// Select on q.done as well as the buffer send: a bare send would leave
-		// this poller blocked forever if Stop fires while the buffer is full
-		// (the workers that drain it exit on done).  Same idiom as onTaskError.
+		// Hand each task to a worker, selecting on q.done as well: a bare send would park this
+		// poller forever if Stop fired while the buffer was full.
 		for _, task := range tasks {
 
 			select {
@@ -168,17 +165,13 @@ func (q *Queue) Publish(task Task) error {
 		return nil
 	}
 
-	// Special Case #1: If there is no storage provider,
-	// then queue the Task in the memory buffer.  This *may*
-	// hold up execution if the buffer is full because there's
-	// no storage provider to fall back on.
+	// Special Case #1: With no storage provider the Task goes on the memory buffer, which may
+	// block the caller when it is full -- there is nowhere else to put it.
 	if q.storage == nil {
 
-		// RULE: Once Stop has closed q.done, no workers remain to drain the
-		// buffer, so a bare send would block this caller forever.  Fail fast
-		// instead.  (A storage-backed Task is still worth writing to disk --
-		// another process, or the next restart, will pick it up -- so this
-		// guard belongs only on the memory-only path.)
+		// RULE: After Stop, no worker remains to drain the buffer, so fail fast instead of
+		// blocking forever.  Storage-backed Tasks skip this guard -- they are still worth
+		// writing, because the next restart picks them up.
 		if channel.Closed(q.done) {
 			return derp.Internal(location, "Queue is stopped. Task not published", task.Name)
 		}
@@ -263,9 +256,8 @@ func (q *Queue) Delete(signature string) error {
 	return nil
 }
 
-// Stop closes the queue and stops all workers (after they complete their current task).
-// Stop is idempotent -- a second call waits for the workers again instead of panicking
-// on a double close, so shutdown can be triggered from more than one place.
+// Stop closes the queue and waits for every worker to finish its current task.
+// Stop is idempotent.
 func (q *Queue) Stop() {
 
 	// Send "stop" signal to all workers
@@ -277,10 +269,8 @@ func (q *Queue) Stop() {
 	q.workers.Wait()
 }
 
-// prepareTask applies every rule a Task passes through on its way onto the Queue: the
-// PreProcessor, each Consumer's OnPublish, and finally the Queue's defaults for any value still
-// unset.  Publish and Schedule both route through here, so a Task can never reach storage
-// carrying the "unset" sentinels that NewTask writes.
+// prepareTask applies every publish-time rule: the PreProcessor, each Consumer's OnPublish,
+// and then the Queue's defaults.  Both Publish and Schedule route through it.
 func (q *Queue) prepareTask(task *Task) error {
 
 	const location = "queue.Queue.prepareTask"

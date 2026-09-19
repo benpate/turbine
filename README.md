@@ -59,7 +59,7 @@ implementations:
 ```go
 type Consumer interface {
     OnPublish(task *queue.Task) error
-    Consume(task queue.Task) queue.Result
+    Run(task queue.Task) queue.Result
     OnSuccess(task queue.Task) error
     OnError(task queue.Task, err error) error
     OnFailure(task queue.Task, err error) error
@@ -73,7 +73,7 @@ rejects the task and reports that error back to whoever published it.  Every reg
 sees every task, in registration order.  This is the per-consumer replacement for
 `WithPreProcessor`, which still works and still runs first.
 
-`Consume` does the work.  The other three are how the queue tells a consumer what it decided,
+`Run` does the work.  The other three are how the queue tells a consumer what it decided,
 and a consumer with nothing to say on an event returns `nil`.  All four are required on purpose:
 an optional hook whose name or signature drifted would stop being called with no compile error
 and no log line.

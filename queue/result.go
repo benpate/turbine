@@ -2,17 +2,15 @@ package queue
 
 import "time"
 
-// ResultStatusIgnored represents a task that was not processed because
-// the consumer does not recognize it.  The task will be passed to
-// another consumer, or error out permanently.
+// ResultStatusIgnored means this consumer does not recognize the task, which is then offered
+// to the next one.  A task NO consumer recognizes fails the run and is left on the queue.
 const ResultStatusIgnored = "IGNORED"
 
 // ResultStatusSuccess represents a task that was completed successfully
 const ResultStatusSuccess = "SUCCESS"
 
-// ResultStatusRequeue represents a task that has completed successfully
-// and should be re-executed at its same priority level.  This is useful
-// for long series of tasks that need to execute over multiple records.
+// ResultStatusRequeue represents a task that completed successfully and should run again at
+// the same priority.
 const ResultStatusRequeue = "REQUEUE"
 
 // ResultStatusError represents a task that was experienced an error,
@@ -58,9 +56,8 @@ func Ignored() Result {
 	}
 }
 
-// Requeue returns a Result object that will be "REQUEUED"
-// which marks THIS task as successful, and also pushes a
-// copy of this task back onto the queue to run again.
+// Requeue returns a "REQUEUE" Result: THIS run counts as a success, and a fresh copy of the
+// task is published to run again after the delay.
 func Requeue(delay time.Duration) Result {
 	return Result{
 		Status: ResultStatusRequeue,

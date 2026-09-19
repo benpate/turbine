@@ -56,10 +56,9 @@ func (storage Storage) SaveTask(task queue.Task) error {
 		}
 	}
 
-	// RULE: If ANOTHER task is already queued with this signature, then do not
-	// run this one again.  The identity check must happen first so the Task's
-	// own record can be excluded: SaveTask is also how a retry writes its
-	// updated counters back, and matching itself would silently discard them.
+	// RULE: If ANOTHER task is already queued with this signature, do not run this one.  The
+	// Task's own record is excluded because SaveTask is also how a retry writes its counters
+	// back, and matching itself would discard them.
 	if storage.isDuplicateSignature(timeout, task.Signature, taskID) {
 		return nil
 	}
@@ -198,10 +197,9 @@ func (storage Storage) GetTasks() ([]queue.Task, error) {
 		"lockId": lockID,
 	}
 
-	// Sort by priority first (matching pickTasks), then startDate, so every
-	// priority=1 task in the locked batch is dispatched before any priority=2.
-	// NOTE: lockTasks stamps the whole batch with startDate=now, so startDate
-	// is only a tiebreaker here.
+	// Sort by priority first (matching pickTasks), then startDate, so every priority=1 task in
+	// the locked batch is dispatched before any priority=2.  lockTasks stamps the whole batch
+	// with startDate=now, so startDate is only a tiebreaker here.
 	options := options.Find().SetSort(bson.D{
 		{Key: "priority", Value: 1},
 		{Key: "startDate", Value: 1},
@@ -303,10 +301,8 @@ func (storage Storage) pickTasks(timeout context.Context) ([]primitive.ObjectID,
 	return result, nil
 }
 
-// isDuplicateSignature returns TRUE if a task OTHER than taskID is already in
-// the queue with this signature.  taskID is excluded so that re-saving a task
-// (for instance, writing back its retry counters) is never mistaken for a
-// duplicate of itself.
+// isDuplicateSignature returns TRUE if a task OTHER than taskID is already queued with this
+// signature.  Excluding taskID keeps a retry's counter write-back from matching itself.
 func (storage Storage) isDuplicateSignature(timeout context.Context, signature string, taskID primitive.ObjectID) bool {
 
 	const location = "queue_mongo.isDuplicateSignature"

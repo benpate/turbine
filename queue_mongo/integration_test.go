@@ -12,9 +12,8 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-// testStorage connects to a local MongoDB and returns a Storage that writes to a
-// uniquely-named test database. The database is dropped during test cleanup. If
-// MongoDB is not reachable, the test is skipped rather than failed.
+// testStorage returns a Storage backed by a uniquely-named test database, dropped on cleanup.
+// The test is skipped, not failed, when MongoDB is unreachable.
 func testStorage(t *testing.T, lockQuantity int, timeoutMinutes int) Storage {
 	t.Helper()
 
@@ -203,12 +202,12 @@ func TestIntegration_GetTasks_RespectsStartDate(t *testing.T) {
 	require.Equal(t, 0, len(tasks))
 }
 
-// TestIntegration_SignatureRetryWriteback pins the retry path for tasks that
-// carry a Signature.  queue.onTaskError bumps a task's counters and calls
-// SaveTask to write them back; when the duplicate-signature check matched the
-// task's OWN record, that write was silently dropped, so RetryCount never
-// advanced and the task retried forever instead of reaching the failure log.
+// TestIntegration_SignatureRetryWriteback pins the retry path for tasks that carry a Signature
 func TestIntegration_SignatureRetryWriteback(t *testing.T) {
+
+	// queue.onTaskError bumps a task's counters and calls SaveTask to write them back.  When the
+	// duplicate-signature check matched the task's OWN record, that write was dropped silently,
+	// so RetryCount never advanced and the task retried forever.
 
 	storage := testStorage(t, 16, 5)
 
@@ -221,7 +220,7 @@ func TestIntegration_SignatureRetryWriteback(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 1, len(locked))
 
-	// Write the task back, exactly as onTaskError does after a failed run
+	// Write the task back, as onTaskError does after a failed run
 	retried := locked[0]
 	retried.LockID = ""
 	retried.TimeoutDate = 0
@@ -244,10 +243,11 @@ func TestIntegration_SignatureRetryWriteback(t *testing.T) {
 	require.Equal(t, int64(1), count, "write-back must update, not duplicate")
 }
 
-// TestIntegration_SignatureStillBlocksOtherTasks confirms the self-exclusion
-// above did not weaken the actual dedup rule: a DIFFERENT task claiming a
-// signature that is already queued is still dropped.
+// TestIntegration_SignatureStillBlocksOtherTasks confirms the self-exclusion above did not
+// weaken the dedup rule itself
 func TestIntegration_SignatureStillBlocksOtherTasks(t *testing.T) {
+
+	// A DIFFERENT task claiming a signature that is already queued is still dropped.
 
 	storage := testStorage(t, 16, 5)
 

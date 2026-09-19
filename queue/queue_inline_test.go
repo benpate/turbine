@@ -67,7 +67,7 @@ func TestInline_AtMostOnce_ErrorNotRetried(t *testing.T) {
 	require.NoError(t, q.Publish(NewTask("nudge", nil, WithInline())))
 	q.Stop()
 
-	// Exactly one attempt: errors are reported and dropped, never requeued
+	// One attempt only: errors are reported and dropped, never requeued
 	require.Equal(t, int32(1), atomic.LoadInt32(&calls))
 	require.Empty(t, storage.saved)
 	require.Empty(t, storage.failures)
@@ -188,10 +188,10 @@ func TestInline_SignatureRejected(t *testing.T) {
 	require.Equal(t, int32(0), atomic.LoadInt32(&calls))
 }
 
-// TestInline_AfterStop rejects an Inline publish once the queue is stopped: the
-// goroutine it would need is registered with the WaitGroup that Stop is already
-// waiting on.
+// TestInline_AfterStop rejects an Inline publish once the queue is stopped
 func TestInline_AfterStop(t *testing.T) {
+
+	// The goroutine it would need registers with the WaitGroup that Stop is already waiting on.
 
 	var calls int32
 

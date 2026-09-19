@@ -13,10 +13,8 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
-// Storage implements a simplified queue Storage interface using a filesystem.
-// This storage engine does not support duplicate checking.  It returns a single
-// task at a time, probably in order of creation time (but no guarantees are made).
-// This storage engine is not safe for concurrent access by multiple workers.
+// Storage is a filesystem-backed queue Storage for single-worker development use.  It ignores
+// Priority and StartDate, does no duplicate checking, and is not safe for concurrent workers.
 type Storage struct {
 	directory string // The filesystem directory to read/write
 }
@@ -89,10 +87,8 @@ func (storage Storage) DeleteTask(taskID string) error {
 	filename := storage.directory + "/" + taskID + ".json"
 	if err := os.Remove(filename); err != nil {
 
-		// RULE: A missing file is success, not an error.  GetTasks removes each
-		// spool file as it hands the Task to a worker (this backend runs tasks
-		// at-most-once), so the file is already gone by the time the Queue
-		// reports the Task complete and calls DeleteTask.
+		// RULE: A missing file is success, not an error.  GetTasks removes each spool file as
+		// it hands the Task to a worker, so it is already gone by the time DeleteTask runs.
 		if errors.Is(err, fs.ErrNotExist) {
 			return nil
 		}

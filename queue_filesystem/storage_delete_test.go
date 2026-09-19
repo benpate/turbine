@@ -10,9 +10,8 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
-// TestDeleteTask_InvalidID pins the ObjectID guard: TaskIDs that aren't valid
-// ObjectID hex are rejected before any filesystem path is built, so a
-// malformed ID can never reach outside the storage directory.
+// TestDeleteTask_InvalidID pins the ObjectID guard: a malformed TaskID is rejected before any
+// filesystem path is built, so it can never reach outside the storage directory
 func TestDeleteTask_InvalidID(t *testing.T) {
 
 	directory := t.TempDir()
@@ -35,11 +34,12 @@ func TestDeleteTask_InvalidID(t *testing.T) {
 	require.NoError(t, err, "traversal target must still exist")
 }
 
-// TestDeleteTask_AlreadyRemoved pins the completion path: GetTasks removes each
-// spool file as it hands the Task to a worker, so the DeleteTask that follows a
-// successful run finds nothing to remove.  That is success, not an error --
-// treating it as an error made every completed task report a spurious 500.
+// TestDeleteTask_AlreadyRemoved pins the completion path: the DeleteTask that follows a
+// successful run finds nothing to remove, and that is success
 func TestDeleteTask_AlreadyRemoved(t *testing.T) {
+
+	// GetTasks removes each spool file as it hands the Task to a worker.  Treating the missing
+	// file as an error made every completed task report a spurious 500.
 
 	storage := New(t.TempDir())
 	require.NoError(t, storage.SaveTask(queue.NewTask("hello", map[string]any{})))
@@ -50,17 +50,19 @@ func TestDeleteTask_AlreadyRemoved(t *testing.T) {
 	require.Len(t, tasks, 1)
 	require.NotEmpty(t, tasks[0].TaskID, "task read back must carry its TaskID")
 
-	// This is exactly what queue.onTaskSucceeded does when the task completes
+	// This is what queue.onTaskSuccess does when the task completes
 	require.NoError(t, storage.DeleteTask(tasks[0].TaskID))
 
 	// A second delete of the same (missing) task is equally harmless
 	require.NoError(t, storage.DeleteTask(tasks[0].TaskID))
 }
 
-// TestDeleteTask_RealErrorStillReported confirms the missing-file tolerance did
-// not swallow genuine filesystem errors: a directory in place of the task file
-// cannot be removed with os.Remove, and that error must still surface.
+// TestDeleteTask_RealErrorStillReported confirms the missing-file tolerance did not swallow
+// genuine filesystem errors
 func TestDeleteTask_RealErrorStillReported(t *testing.T) {
+
+	// A directory in place of the task file cannot be removed with os.Remove, and that error
+	// must still surface.
 
 	directory := t.TempDir()
 	storage := New(directory)

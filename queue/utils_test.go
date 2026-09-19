@@ -49,10 +49,11 @@ func TestBackoff_ClampPreventsOverflow(t *testing.T) {
 	require.Equal(t, time.Duration(1<<26)*time.Minute, backoff(26))
 }
 
-// TestBackoff_NegativeRetryCountDoesNotPanic guards the lower end of the clamp.  A variable
-// shift by a negative amount is a run-time panic in Go, so a corrupt or hand-edited record with
-// a negative RetryCount must be treated as the first attempt rather than crashing a worker.
+// TestBackoff_NegativeRetryCountDoesNotPanic guards the lower end of the clamp
 func TestBackoff_NegativeRetryCountDoesNotPanic(t *testing.T) {
+
+	// A variable shift by a negative amount panics at run time, so a corrupt record with a
+	// negative RetryCount must be treated as the first attempt rather than crashing a worker.
 
 	for _, retryCount := range []int{-1, -8, -1000} {
 		require.NotPanics(t, func() { backoff(retryCount) }, "retryCount=%d", retryCount)

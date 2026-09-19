@@ -6,10 +6,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// NOTE: The Storage methods (SaveTask, GetTasks, DeleteTask, LogFailure, etc.)
-// all require a live MongoDB connection and are therefore covered by integration
-// tests rather than unit tests. The cases below exercise only the parts of the
-// package that do not touch the database.
+// The Storage methods all need a live MongoDB connection, so integration tests cover them.
+// The cases below exercise only the parts of the package that never touch the database.
 
 func TestNew(t *testing.T) {
 

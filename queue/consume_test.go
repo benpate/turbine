@@ -113,12 +113,12 @@ func TestConsume_Failure(t *testing.T) {
 
 // --- Event handler edge cases ---
 
-func TestOnTaskSucceeded_NoStorage(t *testing.T) {
+func TestOnTaskSuccess_NoStorage(t *testing.T) {
 	q := New()
-	require.NoError(t, q.onTaskSucceeded(Task{TaskID: "abc"}))
+	require.NoError(t, q.onTaskSuccess(consumerFunc(func(Task) Result { return Success() }), Task{TaskID: "abc"}))
 }
 
-func TestOnTaskSucceeded_StorageError(t *testing.T) {
+func TestOnTaskSuccess_StorageError(t *testing.T) {
 	storage := &mockStorage{deleteErr: errors.New("db down")}
 	q := New(WithStorage(storage), withConsumerFuncs(func(Task) Result {
 		return Success()
@@ -126,6 +126,29 @@ func TestOnTaskSucceeded_StorageError(t *testing.T) {
 
 	// A delete error propagates out of consume
 	require.Error(t, q.consume(Task{TaskID: "abc", Name: "x"}))
+}
+
+func TestOnTaskError_SaveErrorPropagates(t *testing.T) {
+
+	storage := &mockStorage{saveErr: errors.New("db down")}
+	q := New(WithStorage(storage), withConsumerFuncs(func(Task) Result {
+		return Error(errors.New("temporary"))
+	}))
+
+	// A task that cannot be written back for its retry is NOT silently dropped
+	require.Error(t, q.consume(Task{TaskID: "abc", Name: "x", RetryCount: 0, RetryMax: 8}))
+}
+
+func TestOnTaskFailure_DeleteErrorPropagates(t *testing.T) {
+
+	storage := &mockStorage{deleteErr: errors.New("db down")}
+	q := New(WithStorage(storage), withConsumerFuncs(func(Task) Result {
+		return Failure(errors.New("permanent"))
+	}))
+
+	// The failure is logged, but the task could not be removed -- the caller hears about it
+	require.Error(t, q.consume(Task{TaskID: "abc", Name: "x"}))
+	require.Len(t, storage.failures, 1)
 }
 
 func TestOnTaskError_NoStorageUsesBuffer(t *testing.T) {
@@ -145,7 +168,7 @@ func TestOnTaskFailure_NoStorage(t *testing.T) {
 		return Failure(errors.New("permanent"))
 	}))
 
-	// With no storage, a failure is simply reported and swallowed
+	// With no storage, a failure is reported and swallowed
 	require.NoError(t, q.consume(Task{Name: "x"}))
 }
 

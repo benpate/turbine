@@ -10,10 +10,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// FuzzStorageRoundTrip confirms that a Task saved to filesystem storage is
-// returned by GetTasks with its name and arguments intact. This exercises the
-// real persistence path (JSON marshal, file write, read, unmarshal) end to end.
+// FuzzStorageRoundTrip confirms that a Task saved to filesystem storage comes back from
+// GetTasks with its name and arguments intact
 func FuzzStorageRoundTrip(f *testing.F) {
+
+	// This drives the real persistence path end to end: JSON marshal, file write, read,
+	// unmarshal.
 
 	f.Add("taskName", "argKey", "argValue")
 	f.Add("", "", "")
@@ -21,7 +23,7 @@ func FuzzStorageRoundTrip(f *testing.F) {
 
 	f.Fuzz(func(t *testing.T, name, argKey, argValue string) {
 
-		// Tasks are persisted as JSON, which only round trips valid UTF-8 exactly
+		// Tasks are persisted as JSON, which only round trips valid UTF-8 unchanged
 		// (see queue.FuzzTaskJSONRoundTrip). Skip inputs the std library mangles.
 		if !utf8.ValidString(name) || !utf8.ValidString(argKey) || !utf8.ValidString(argValue) {
 			t.Skip()
@@ -32,7 +34,7 @@ func FuzzStorageRoundTrip(f *testing.F) {
 		// Save a single task into the (empty) storage directory
 		require.NoError(t, storage.SaveTask(queue.NewTask(name, mapof.Any{argKey: argValue})))
 
-		// GetTasks must return exactly the task we saved
+		// GetTasks must return the task we saved, unchanged
 		tasks, err := storage.GetTasks()
 		require.NoError(t, err)
 		require.Equal(t, 1, len(tasks))
@@ -46,11 +48,11 @@ func FuzzStorageRoundTrip(f *testing.F) {
 	})
 }
 
-// FuzzGetTasks_ArbitraryBytes confirms that GetTasks never panics on arbitrary
-// file contents. Files in the queue directory are untrusted bytes once they hit
-// disk, so a malformed file must produce a clean error or be skipped, never a
-// crash.
+// FuzzGetTasks_ArbitraryBytes confirms that GetTasks never panics on arbitrary file contents
 func FuzzGetTasks_ArbitraryBytes(f *testing.F) {
+
+	// Files in the queue directory are untrusted bytes once they hit disk, so a malformed one
+	// must produce a clean error or be skipped, never a crash.
 
 	f.Add([]byte(`{"name":"valid"}`))
 	f.Add([]byte("not json at all"))

@@ -73,10 +73,11 @@ func TestConsumerHooks_Success(t *testing.T) {
 	require.Equal(t, []string{"Run", "OnSuccess"}, *events)
 }
 
-// TestConsumerHooks_Requeue reports a requeue as a success, because THIS run succeeded.  The
-// trailing OnPublish is not noise: requeueTask re-enters Publish with a fresh identity, so the
-// copy that runs next is a new publish and earns a new pass through the publish-time rules.
+// TestConsumerHooks_Requeue reports a requeue as a success, because THIS run succeeded
 func TestConsumerHooks_Requeue(t *testing.T) {
+
+	// The trailing OnPublish is not noise: requeueTask re-enters Publish with a fresh identity,
+	// so the copy that runs next earns a new pass through the publish-time rules.
 
 	consumer, events, _ := newRecordingConsumer(Requeue(0))
 	q := New(WithStorage(&mockStorage{}), WithConsumers(consumer))
@@ -95,10 +96,11 @@ func TestConsumerHooks_Error(t *testing.T) {
 	require.Equal(t, []string{"Run", "OnError"}, *events)
 }
 
-// TestConsumerHooks_ErrorOnFinalAttempt reports an ABANDONED task as a failure, even though the
-// Consumer asked for a retry.  The queue has no retries left, so OnError would promise a run
-// that never happens.
+// TestConsumerHooks_ErrorOnFinalAttempt reports an ABANDONED task as a failure, even though
+// the Consumer asked for a retry
 func TestConsumerHooks_ErrorOnFinalAttempt(t *testing.T) {
+
+	// The queue has no retries left, so OnError would promise a run that never happens.
 
 	consumer, events, _ := newRecordingConsumer(Error(errors.New("nope")))
 	q := New(WithStorage(&mockStorage{}), WithConsumers(consumer))
@@ -135,23 +137,85 @@ func TestConsumerHooks_OnlyTheConsumerThatHandledIt(t *testing.T) {
 // and nothing more -- the queue has already decided what happens to the task
 func TestConsumerHooks_HookErrorDoesNotChangeTheOutcome(t *testing.T) {
 
-	events := make([]string, 0)
-	tasks := make([]Task, 0)
+	// Every hook gets its own case, because each reports its own error -- one passing case no
+	// longer speaks for the rest.
 
-	consumer := recordingConsumer{
-		result:    Success(),
-		events:    &events,
-		tasks:     &tasks,
-		hookError: errors.New("the hook itself failed"),
+	// newFailingConsumer returns a Consumer whose hooks all fail, whatever Run decided
+	newFailingConsumer := func(result Result) recordingConsumer {
+		events := make([]string, 0)
+		tasks := make([]Task, 0)
+
+		return recordingConsumer{
+			result:    result,
+			events:    &events,
+			tasks:     &tasks,
+			hookError: errors.New("the hook itself failed"),
+		}
 	}
 
-	storage := &mockStorage{}
-	q := New(WithStorage(storage), WithConsumers(consumer))
+	t.Run("OnSuccess", func(t *testing.T) {
 
-	require.NoError(t, q.consume(Task{TaskID: "abc", Name: "x"}))
+		storage := &mockStorage{}
+		q := New(WithStorage(storage), WithConsumers(newFailingConsumer(Success())))
 
-	// The task is still deleted, exactly as it would be with a silent hook
-	require.Equal(t, []string{"abc"}, storage.deleted)
+		require.NoError(t, q.consume(Task{TaskID: "abc", Name: "x"}))
+
+		// The task is still deleted, as it would be with a silent hook
+		require.Equal(t, []string{"abc"}, storage.deleted)
+	})
+
+	t.Run("OnError", func(t *testing.T) {
+
+		storage := &mockStorage{}
+		q := New(WithStorage(storage), WithConsumers(newFailingConsumer(Error(errors.New("nope")))))
+
+		require.NoError(t, q.consume(Task{TaskID: "abc", Name: "x", RetryCount: 0, RetryMax: 8}))
+
+		// The retry is still written back, with its failure counted
+		require.Len(t, storage.saved, 1)
+		require.Equal(t, 1, storage.saved[0].RetryCount)
+	})
+
+	t.Run("OnFailure from an abandoned retry", func(t *testing.T) {
+
+		storage := &mockStorage{}
+		q := New(WithStorage(storage), WithConsumers(newFailingConsumer(Error(errors.New("nope")))))
+
+		require.NoError(t, q.consume(Task{TaskID: "abc", Name: "x", RetryCount: 8, RetryMax: 8}))
+
+		// The task is still abandoned to the error log
+		require.Len(t, storage.failures, 1)
+		require.Equal(t, []string{"abc"}, storage.deleted)
+	})
+
+	t.Run("OnFailure from an outright failure", func(t *testing.T) {
+
+		storage := &mockStorage{}
+		q := New(WithStorage(storage), WithConsumers(newFailingConsumer(Failure(errors.New("nope")))))
+
+		require.NoError(t, q.consume(Task{TaskID: "abc", Name: "x"}))
+
+		require.Len(t, storage.failures, 1)
+		require.Equal(t, []string{"abc"}, storage.deleted)
+	})
+
+	t.Run("OnSuccess, inline", func(t *testing.T) {
+
+		q := New(WithConsumers(newFailingConsumer(Success())))
+
+		// An inline task has no storage to check, so the assertion is that the failing hook
+		// neither panics nor escapes into the caller
+		q.workers.Add(1)
+		require.NotPanics(t, func() { q.runInline(Task{Name: "x", Inline: true}) })
+	})
+
+	t.Run("OnFailure, inline", func(t *testing.T) {
+
+		q := New(WithConsumers(newFailingConsumer(Error(errors.New("nope")))))
+
+		q.workers.Add(1)
+		require.NotPanics(t, func() { q.runInline(Task{Name: "x", Inline: true, RetryMax: 8}) })
+	})
 }
 
 // TestConsumerHooks_ConsumerSeesTheTask pins what a Consumer is handed
@@ -180,10 +244,11 @@ func TestConsumerHooks_ConsumerSeesTheTask(t *testing.T) {
 	require.False(t, got.IsFinalAttempt())
 }
 
-// TestTask_IsFinalAttempt pins the retry boundary.  These values are not guesses: a Task with
-// RetryCount 7 of 8 is still retried, and one with RetryCount 8 of 8 is abandoned -- which is
-// why the comparison is `>= RetryMax` and not `>= RetryMax-1`.
+// TestTask_IsFinalAttempt pins the retry boundary
 func TestTask_IsFinalAttempt(t *testing.T) {
+
+	// These values are measured, not guessed: RetryCount 7 of 8 is still retried, and 8 of 8 is
+	// abandoned -- which is why the comparison is `>= RetryMax`.
 
 	require.False(t, Task{RetryCount: 0, RetryMax: 8}.IsFinalAttempt())
 	require.False(t, Task{RetryCount: 6, RetryMax: 8}.IsFinalAttempt())
@@ -237,4 +302,54 @@ func TestConsumerHooks_Inline(t *testing.T) {
 
 		require.Equal(t, []string{"Run", "OnFailure"}, *events)
 	})
+}
+
+// hookTaskConsumer records the Task value that each outcome hook is handed
+type hookTaskConsumer struct {
+	result    Result
+	errorTask *Task
+	failTask  *Task
+}
+
+// OnPublish implements the Consumer interface
+func (consumer *hookTaskConsumer) OnPublish(*Task) error { return nil }
+
+// Run implements the Consumer interface
+func (consumer *hookTaskConsumer) Run(Task) Result { return consumer.result }
+
+// OnSuccess implements the Consumer interface
+func (consumer *hookTaskConsumer) OnSuccess(Task) error { return nil }
+
+// OnError implements the Consumer interface
+func (consumer *hookTaskConsumer) OnError(task Task, _ error) error {
+	consumer.errorTask = &task
+	return nil
+}
+
+// OnFailure implements the Consumer interface
+func (consumer *hookTaskConsumer) OnFailure(task Task, _ error) error {
+	consumer.failTask = &task
+	return nil
+}
+
+// TestConsumerHooks_HookSeesTheAttemptThatRan pins the Consumer contract: a hook is handed the
+// Task as it stood when that attempt began, not the copy prepared for the NEXT one
+func TestConsumerHooks_HookSeesTheAttemptThatRan(t *testing.T) {
+
+	consumer := &hookTaskConsumer{result: Error(errors.New("nope"))}
+	storage := &mockStorage{}
+	q := New(WithStorage(storage), WithConsumers(consumer))
+
+	// RetryCount 7 of 8 is the boundary: this attempt is NOT the last one, but the retry queued
+	// behind it will be
+	require.NoError(t, q.consume(Task{TaskID: "abc", Name: "x", RetryCount: 7, RetryMax: 8}))
+
+	require.NotNil(t, consumer.errorTask)
+	require.Equal(t, 7, consumer.errorTask.RetryCount, "the hook sees the attempt that just failed")
+	require.False(t, consumer.errorTask.IsFinalAttempt(), "another attempt is still coming")
+
+	// ...while the Task written back for the next run has this failure counted
+	require.Len(t, storage.saved, 1)
+	require.Equal(t, 8, storage.saved[0].RetryCount)
+	require.True(t, storage.saved[0].IsFinalAttempt(), "the NEXT run is the last one")
 }

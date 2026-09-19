@@ -169,11 +169,12 @@ func TestAllowImmediate(t *testing.T) {
 	require.False(t, q.allowImmediate(&Task{Priority: 1, Signature: "sig"}))
 }
 
-// TestPublish_AfterStop_NoStorage pins shutdown behavior for a memory-only
-// queue.  Stop leaves no workers to drain the buffer, so a bare send would
-// park the caller forever -- an in-flight request handler publishing during
-// graceful shutdown would never return.  Publish must fail fast instead.
+// TestPublish_AfterStop_NoStorage pins shutdown behavior for a memory-only queue: Publish
+// must fail fast rather than park the caller
 func TestPublish_AfterStop_NoStorage(t *testing.T) {
+
+	// Stop leaves no workers to drain the buffer, so a bare send would never return -- and the
+	// caller is often an in-flight request handler publishing during graceful shutdown.
 
 	q := New(WithBufferSize(1), WithWorkerCount(0), WithPollStorage(false))
 	q.Start()
@@ -201,10 +202,12 @@ func TestPublish_AfterStop_NoStorage(t *testing.T) {
 	}
 }
 
-// TestPublish_AfterStop_WithStorage confirms the stopped-queue guard is scoped
-// to the memory-only path.  With a storage provider the Task is still worth
-// persisting: another process, or the next restart, will pick it up.
+// TestPublish_AfterStop_WithStorage confirms the stopped-queue guard is scoped to the
+// memory-only path
 func TestPublish_AfterStop_WithStorage(t *testing.T) {
+
+	// With a storage provider the Task is still worth persisting: another process, or the next
+	// restart, will pick it up.
 
 	storage := &mockStorage{}
 	q := New(WithStorage(storage), WithBufferSize(1), WithWorkerCount(0), WithPollStorage(false))
@@ -217,10 +220,11 @@ func TestPublish_AfterStop_WithStorage(t *testing.T) {
 	require.Equal(t, "late", storage.saved[0].Name)
 }
 
-// TestStop_Idempotent pins Stop against a double close of the done channel,
-// which panics.  Shutdown is often triggered from more than one place (a signal
-// handler and an explicit call), so a second Stop must be harmless.
+// TestStop_Idempotent pins Stop against a double close of the done channel, which panics
 func TestStop_Idempotent(t *testing.T) {
+
+	// Shutdown is often triggered from more than one place -- a signal handler and an explicit
+	// call -- so a second Stop must be harmless.
 
 	q := New(WithWorkerCount(2), WithPollStorage(false))
 	q.Start()

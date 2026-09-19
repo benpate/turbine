@@ -8,9 +8,11 @@ import (
 )
 
 // TestConsumeSafely_ContainsPanic confirms that a panicking Consumer does not unwind into the
-// worker goroutine.  Without the recover, this panic reaches the runtime and kills the process,
-// taking every other in-flight Task with it.
+// worker goroutine
 func TestConsumeSafely_ContainsPanic(t *testing.T) {
+
+	// Without the recover, this panic reaches the runtime and kills the process, taking every
+	// other in-flight Task with it.
 
 	q := New(WithStorage(&mockStorage{}), withConsumerFuncs(func(Task) Result {
 		panic("consumer exploded")
@@ -21,10 +23,12 @@ func TestConsumeSafely_ContainsPanic(t *testing.T) {
 	})
 }
 
-// TestConsumeSafely_PanicIsRetriedThenAbandoned confirms that a panicking Task is routed through
-// the normal error path.  Dropping it instead would leave its storage record in place, to be
-// re-locked and re-panicked once the lease expired -- forever.
+// TestConsumeSafely_PanicIsRetriedThenAbandoned confirms that a panicking Task is routed
+// through the normal error path
 func TestConsumeSafely_PanicIsRetriedThenAbandoned(t *testing.T) {
+
+	// Dropping it instead would leave its storage record in place, to be re-locked and
+	// re-panicked once the lease expired -- forever.
 
 	t.Run("retried while attempts remain", func(t *testing.T) {
 
@@ -83,4 +87,50 @@ func TestConsumeSafely_WorkerSurvives(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		require.Fail(t, "worker died after the panicking task")
 	}
+}
+
+// panickingConsumer panics in Run, and records every lifecycle hook it is told about
+type panickingConsumer struct {
+	events *[]string
+}
+
+// OnPublish implements the Consumer interface
+func (consumer panickingConsumer) OnPublish(*Task) error { return nil }
+
+// Run implements the Consumer interface
+func (consumer panickingConsumer) Run(Task) Result { panic("consumer exploded") }
+
+// OnSuccess implements the Consumer interface
+func (consumer panickingConsumer) OnSuccess(Task) error {
+	*consumer.events = append(*consumer.events, "OnSuccess")
+	return nil
+}
+
+// OnError implements the Consumer interface
+func (consumer panickingConsumer) OnError(Task, error) error {
+	*consumer.events = append(*consumer.events, "OnError")
+	return nil
+}
+
+// OnFailure implements the Consumer interface
+func (consumer panickingConsumer) OnFailure(Task, error) error {
+	*consumer.events = append(*consumer.events, "OnFailure")
+	return nil
+}
+
+// TestConsumeSafely_PanicNotifiesNobody pins a KNOWN GAP, not desired behavior
+func TestConsumeSafely_PanicNotifiesNobody(t *testing.T) {
+
+	// A panic unwinds out of dispatch, losing the value naming which Consumer was handling the
+	// Task.  Recovering inside dispatch would fix that and should make this test fail -- update
+	// it and AGENTS.md together when it does.
+
+	events := []string{}
+	storage := &mockStorage{}
+	q := New(WithStorage(storage), WithConsumers(panickingConsumer{events: &events}))
+
+	q.consumeSafely(Task{TaskID: "abc", Name: "x", RetryCount: 8, RetryMax: 8})
+
+	require.Len(t, storage.failures, 1, "the outcome IS recorded")
+	require.Empty(t, events, "but the Consumer is never told")
 }

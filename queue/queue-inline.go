@@ -10,10 +10,8 @@ func (q *Queue) runInline(task Task) {
 
 	const location = "queue.runInline"
 
-	// Inline tasks bypass the buffer and the storage provider, so they run
-	// at-most-once: consume's requeue/retry machinery (which writes to storage)
-	// must never run for them.  Consumer dispatch is still shared with the
-	// pooled workers (see dispatch); only the result POLICY below differs.
+	// Inline tasks bypass the buffer and storage, so they run at-most-once and must never
+	// reach consume's retry machinery.  Dispatch is shared; only the result policy differs.
 
 	// Signal the WaitGroup on exit.  Publish added this goroutine to q.workers,
 	// so Stop waits for in-flight inline tasks before returning.
