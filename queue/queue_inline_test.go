@@ -19,9 +19,9 @@ func TestInline_Runs(t *testing.T) {
 	var gotName atomic.Value
 
 	storage := &mockStorage{}
-	q := New(WithStorage(storage), WithConsumers(func(name string, _ map[string]any) Result {
+	q := New(WithStorage(storage), withConsumerFuncs(func(task Task) Result {
 		atomic.AddInt32(&calls, 1)
-		gotName.Store(name)
+		gotName.Store(task.Name)
 		return Success()
 	}))
 
@@ -43,7 +43,7 @@ func TestInline_WorksWithoutStorage(t *testing.T) {
 
 	// No storage provider: the inline branch must still run (and must not fall
 	// into Special Case #1's blocking buffer send).
-	q := New(WithConsumers(func(string, map[string]any) Result {
+	q := New(withConsumerFuncs(func(Task) Result {
 		atomic.AddInt32(&calls, 1)
 		return Success()
 	}))
@@ -59,7 +59,7 @@ func TestInline_AtMostOnce_ErrorNotRetried(t *testing.T) {
 	var calls int32
 
 	storage := &mockStorage{}
-	q := New(WithStorage(storage), WithConsumers(func(string, map[string]any) Result {
+	q := New(WithStorage(storage), withConsumerFuncs(func(Task) Result {
 		atomic.AddInt32(&calls, 1)
 		return Error(errors.New("temporary"))
 	}))
@@ -78,7 +78,7 @@ func TestInline_AtMostOnce_FailureNotStored(t *testing.T) {
 	var calls int32
 
 	storage := &mockStorage{}
-	q := New(WithStorage(storage), WithConsumers(func(string, map[string]any) Result {
+	q := New(WithStorage(storage), withConsumerFuncs(func(Task) Result {
 		atomic.AddInt32(&calls, 1)
 		return Failure(errors.New("permanent"))
 	}))
@@ -97,7 +97,7 @@ func TestInline_Requeue_Dropped(t *testing.T) {
 	var calls int32
 
 	storage := &mockStorage{}
-	q := New(WithStorage(storage), WithConsumers(func(string, map[string]any) Result {
+	q := New(WithStorage(storage), withConsumerFuncs(func(Task) Result {
 		atomic.AddInt32(&calls, 1)
 		return Requeue(0)
 	}))
@@ -114,13 +114,13 @@ func TestInline_IgnoredTriesNextConsumer(t *testing.T) {
 
 	var accepted int32
 
-	ignoreConsumer := func(string, map[string]any) Result { return Ignored() }
-	acceptConsumer := func(string, map[string]any) Result {
+	ignoreConsumer := func(Task) Result { return Ignored() }
+	acceptConsumer := func(Task) Result {
 		atomic.AddInt32(&accepted, 1)
 		return Success()
 	}
 
-	q := New(WithConsumers(ignoreConsumer, acceptConsumer))
+	q := New(withConsumerFuncs(ignoreConsumer, acceptConsumer))
 
 	require.NoError(t, q.Publish(NewTask("nudge", nil, WithInline())))
 	q.Stop()
@@ -141,7 +141,7 @@ func TestInline_StopDrains(t *testing.T) {
 
 	var finished int32
 
-	q := New(WithConsumers(func(string, map[string]any) Result {
+	q := New(withConsumerFuncs(func(Task) Result {
 		time.Sleep(50 * time.Millisecond)
 		atomic.StoreInt32(&finished, 1)
 		return Success()
@@ -158,7 +158,7 @@ func TestInline_PanicRecovered(t *testing.T) {
 
 	var calls int32
 
-	q := New(WithConsumers(func(string, map[string]any) Result {
+	q := New(withConsumerFuncs(func(Task) Result {
 		atomic.AddInt32(&calls, 1)
 		panic("boom")
 	}))
@@ -175,7 +175,7 @@ func TestInline_SignatureRejected(t *testing.T) {
 
 	var calls int32
 
-	q := New(WithConsumers(func(string, map[string]any) Result {
+	q := New(withConsumerFuncs(func(Task) Result {
 		atomic.AddInt32(&calls, 1)
 		return Success()
 	}))
@@ -195,7 +195,7 @@ func TestInline_AfterStop(t *testing.T) {
 
 	var calls int32
 
-	q := New(WithWorkerCount(0), WithPollStorage(false), WithConsumers(func(string, map[string]any) Result {
+	q := New(WithWorkerCount(0), WithPollStorage(false), withConsumerFuncs(func(Task) Result {
 		atomic.AddInt32(&calls, 1)
 		return Success()
 	}))

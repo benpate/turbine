@@ -24,7 +24,7 @@ There are many, many message queue tools. Perhaps you should use one of those in
 ```go
 // Create and start a queue
 q := queue.New(
-    queue.WithConsumers(myConsumer),  // one or more "consumer" functions (below)
+    queue.WithConsumers(myConsumer),  // one or more "Consumer" implementations (below)
     queue.WithStorage(provider),      // optional storage adapter persists tasks
     queue.WithWorkerCount(16),        // other configs: worker count, buffer size, retries, etc.
 )
@@ -54,16 +54,32 @@ if err := q.Publish(task); err != nil {
 ## Consuming Tasks from the Queue
 
 When the turbine queue receives a task, it tries to execute it using one or more `Consumer`
-functions, which have the following signature:
+implementations:
 
 ```go
-func Consumer(name string, args map[string]any) queue.Result
+type Consumer interface {
+    Consume(task queue.Task) queue.Result
+    OnSuccess(task queue.Task) error
+    OnError(task queue.Task, err error) error
+    OnFailure(task queue.Task, err error) error
+}
 ```
 
+`Consume` does the work.  The other three are how the queue tells a consumer what it decided,
+and a consumer with nothing to say on an event returns `nil`.  All four are required on purpose:
+an optional hook whose name or signature drifted would stop being called with no compile error
+and no log line.
+
+Every method receives the `Task` as it stood when this run began, so `RetryCount` is the number
+of attempts that have already failed.  `task.IsFinalAttempt()` reports whether a failure now
+will abandon the task — though a consumer that only cares about giving up should use
+`OnFailure`, which the queue calls for it.
+
 It is the consumer's job to identify the task by name, and decide if it can
-execute it or not.  You can configure any number of consumer functions, so if
+execute it or not.  You can configure any number of consumers, so if
 a task is not recognized (the consumer returns `queue.Ignored()`), it is passed
-to the next consumer until a match is found.
+to the next consumer until a match is found.  Only the consumer that handled the task
+hears about how it turned out.
 
 If the consumer DOES recognize the Task, then it executes the job and returns one
 of the `queue.Result` constructors:
@@ -74,7 +90,7 @@ of the `queue.Result` constructors:
 - `queue.Requeue(delay)` — the task succeeded and should run again after `delay`
 - `queue.Ignored()` — this consumer does not handle this task
 
-When a consumer returns `queue.Error`, the task is re-queued according to Turbine's exponential backoff logic, and will be re-run at some point in the future.
+When a consumer returns `queue.Error`, the task is re-queued according to Turbine's exponential backoff logic, and will be re-run at some point in the future.  `OnError` is called for each of those retries; when the retries run out, the task is abandoned and `OnFailure` is called instead.
 
 ## Scheduling and Deleting Tasks
 

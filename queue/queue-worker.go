@@ -38,7 +38,7 @@ func (q *Queue) consume(task Task) error {
 	const location = "queue.consume"
 
 	// Dispatch the task to the consumers until one matches or all have been tried.
-	result, consumed := q.dispatch(task)
+	consumer, result, consumed := q.dispatch(task)
 
 	if !consumed {
 		return derp.Internal(location, "No consumers available to process task", task)
@@ -54,6 +54,8 @@ func (q *Queue) consume(task Task) error {
 			return derp.Wrap(err, location, "Setting task success")
 		}
 
+		reportHookError(consumer.OnSuccess(task), "OnSuccess", task.Name)
+
 	// If the task is to be re-queued, then mark it as complete and run it again
 	case ResultStatusRequeue:
 
@@ -62,6 +64,8 @@ func (q *Queue) consume(task Task) error {
 			return derp.Wrap(err, location, "Setting task success")
 		}
 
+		reportHookError(consumer.OnSuccess(task), "OnSuccess", task.Name)
+
 		q.requeueTask(task, result.Delay)
 
 	// If the Task fails but can be retried, then try to re-queue for another attempt
@@ -69,6 +73,14 @@ func (q *Queue) consume(task Task) error {
 
 		log.Trace().Str("location", location).Msg("Task error...")
 		derp.Report(result.Error)
+
+		// RULE: An attempt that fails with no retries left ABANDONS the task, so the Consumer is
+		// told the same thing the queue does.  This mirrors the guard inside onTaskError.
+		if task.IsFinalAttempt() {
+			reportHookError(consumer.OnFailure(task, result.Error), "OnFailure", task.Name)
+		} else {
+			reportHookError(consumer.OnError(task, result.Error), "OnError", task.Name)
+		}
 
 		if err := q.onTaskError(task, result.Error); err != nil {
 			return derp.Wrap(err, location, "Setting task error", result.Error)
@@ -79,6 +91,8 @@ func (q *Queue) consume(task Task) error {
 
 		log.Trace().Str("location", location).Msg("Task failure...")
 		derp.Report(result.Error)
+
+		reportHookError(consumer.OnFailure(task, result.Error), "OnFailure", task.Name)
 
 		if err := q.onTaskFailure(task, result.Error); err != nil {
 			return derp.Wrap(err, location, "Setting task failure", result.Error)
@@ -95,9 +109,9 @@ func (q *Queue) consume(task Task) error {
 	return nil
 }
 
-// dispatch offers a Task to each consumer in turn and returns the first result
-// that isn't "ignored".  It returns ok=false when no consumer recognized the task.
-func (q *Queue) dispatch(task Task) (Result, bool) {
+// dispatch offers a Task to each consumer in turn and returns the first one that does not
+// ignore it, with its result.  It returns ok=false when no consumer recognized the task.
+func (q *Queue) dispatch(task Task) (Consumer, Result, bool) {
 
 	// This is the single home of the consumer-dispatch rule, shared by the
 	// pooled workers (consume) and the inline runner (runInline) — only their
@@ -105,12 +119,12 @@ func (q *Queue) dispatch(task Task) (Result, bool) {
 
 	const location = "queue.dispatch"
 
-	for _, consumeFunc := range q.consumers {
+	for _, consumer := range q.consumers {
 
 		// Try to run the Task.
 		// Any recognized statuses mean this consumer handled the task.
 		// Return with the result data.
-		switch result := consumeFunc(task.Name, task.Arguments); result.Status {
+		switch result := consumer.Consume(task); result.Status {
 
 		case ResultStatusSuccess,
 			ResultStatusRequeue,
@@ -123,7 +137,7 @@ func (q *Queue) dispatch(task Task) (Result, bool) {
 				Str("status", result.Status).
 				Msg("Task executed")
 
-			return result, true
+			return consumer, result, true
 
 		// Ignored status means THIS consumer did not match the task.
 		case ResultStatusIgnored:
@@ -131,12 +145,23 @@ func (q *Queue) dispatch(task Task) (Result, bool) {
 
 		// Unrecognized statuses are bad bad bad. Return an immediate Failure.
 		default:
-			return Failure(derp.Internal(location, "Unrecognized result status", result.Status)), true
+			return consumer, Failure(derp.Internal(location, "Unrecognized result status", result.Status)), true
 		}
 	}
 
 	// Fall-through means that NO consumer was found that matches the task.
-	return Result{}, false
+	return nil, Result{}, false
+}
+
+// reportHookError reports an error returned by a Consumer's lifecycle hook.  A hook cannot change
+// what the queue has already decided about a Task, so its error is reported and nothing else.
+func reportHookError(err error, hook string, taskName string) {
+
+	if err == nil {
+		return
+	}
+
+	derp.Report(derp.Wrap(err, "queue.consume", "Error in Consumer lifecycle hook", hook, taskName))
 }
 
 // requeueTask resets a successful task's identity and run counters, then

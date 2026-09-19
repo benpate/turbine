@@ -23,9 +23,9 @@ func TestNew_Defaults(t *testing.T) {
 
 func TestWithConsumers(t *testing.T) {
 
-	consumer := func(string, map[string]any) Result { return Success() }
+	consumer := func(Task) Result { return Success() }
 
-	q := New(WithConsumers(consumer, consumer))
+	q := New(withConsumerFuncs(consumer, consumer))
 	require.Equal(t, 2, len(q.consumers))
 }
 

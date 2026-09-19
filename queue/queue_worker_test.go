@@ -13,9 +13,9 @@ func TestStartWorker_ProcessesBufferedTasks(t *testing.T) {
 	var mu sync.Mutex
 	consumed := make([]string, 0)
 
-	q := New(WithConsumers(func(name string, _ map[string]any) Result {
+	q := New(withConsumerFuncs(func(task Task) Result {
 		mu.Lock()
-		consumed = append(consumed, name)
+		consumed = append(consumed, task.Name)
 		mu.Unlock()
 		return Success()
 	}))
@@ -43,7 +43,7 @@ func TestStartWorker_ProcessesBufferedTasks(t *testing.T) {
 
 func TestStartWorker_ExitsWhenDoneClosed(t *testing.T) {
 
-	q := New(WithConsumers(func(string, map[string]any) Result {
+	q := New(withConsumerFuncs(func(Task) Result {
 		return Success()
 	}))
 
@@ -73,7 +73,7 @@ func TestStartAndStop_NoStorage(t *testing.T) {
 
 	q := New(
 		WithWorkerCount(2),
-		WithConsumers(func(string, map[string]any) Result {
+		withConsumerFuncs(func(Task) Result {
 			mu.Lock()
 			count++
 			mu.Unlock()

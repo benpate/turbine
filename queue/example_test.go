@@ -19,16 +19,32 @@ func ExampleNewTask() {
 	// to: user@example.com
 }
 
+// printConsumer is a Consumer that prints the name of every task it receives.  Every Consumer
+// implements all four methods; one with nothing to say on an event returns nil.
+type printConsumer struct{}
+
+// Consume implements the Consumer interface
+func (consumer printConsumer) Consume(task Task) Result {
+	fmt.Println("received task:", task.Name)
+	return Success()
+}
+
+// OnSuccess implements the Consumer interface
+func (consumer printConsumer) OnSuccess(Task) error { return nil }
+
+// OnError implements the Consumer interface
+func (consumer printConsumer) OnError(Task, error) error { return nil }
+
+// OnFailure implements the Consumer interface
+func (consumer printConsumer) OnFailure(Task, error) error { return nil }
+
 // ExampleQueue_Publish runs a task end-to-end on a memory-only queue.  The
 // task is marked WithInline, so Publish executes it at-most-once in its own
 // goroutine — no storage provider and no Start() worker pool are needed —
 // and Stop() waits for it to finish.
 func ExampleQueue_Publish() {
 
-	q := New(WithConsumers(func(name string, _ map[string]any) Result {
-		fmt.Println("received task:", name)
-		return Success()
-	}))
+	q := New(WithConsumers(printConsumer{}))
 
 	task := NewTask("SendEmail", map[string]any{}, WithInline())
 

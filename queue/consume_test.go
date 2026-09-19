@@ -10,7 +10,7 @@ import (
 func TestConsume_Success(t *testing.T) {
 
 	storage := &mockStorage{}
-	q := New(WithStorage(storage), WithConsumers(func(string, map[string]any) Result {
+	q := New(WithStorage(storage), withConsumerFuncs(func(Task) Result {
 		return Success()
 	}))
 
@@ -31,10 +31,10 @@ func TestConsume_Ignored_TriesNextConsumer(t *testing.T) {
 
 	storage := &mockStorage{}
 
-	ignoreConsumer := func(string, map[string]any) Result { return Ignored() }
-	acceptConsumer := func(string, map[string]any) Result { return Success() }
+	ignoreConsumer := func(Task) Result { return Ignored() }
+	acceptConsumer := func(Task) Result { return Success() }
 
-	q := New(WithStorage(storage), WithConsumers(ignoreConsumer, acceptConsumer))
+	q := New(WithStorage(storage), withConsumerFuncs(ignoreConsumer, acceptConsumer))
 
 	require.NoError(t, q.consume(Task{TaskID: "abc", Name: "x"}))
 	require.Equal(t, []string{"abc"}, storage.deleted)
@@ -42,8 +42,8 @@ func TestConsume_Ignored_TriesNextConsumer(t *testing.T) {
 
 func TestConsume_AllIgnored(t *testing.T) {
 
-	ignoreConsumer := func(string, map[string]any) Result { return Ignored() }
-	q := New(WithConsumers(ignoreConsumer, ignoreConsumer))
+	ignoreConsumer := func(Task) Result { return Ignored() }
+	q := New(withConsumerFuncs(ignoreConsumer, ignoreConsumer))
 
 	// If every consumer ignores the task, consume returns an error
 	require.Error(t, q.consume(Task{Name: "x"}))
@@ -52,7 +52,7 @@ func TestConsume_AllIgnored(t *testing.T) {
 func TestConsume_Requeue(t *testing.T) {
 
 	storage := &mockStorage{}
-	q := New(WithStorage(storage), WithRunImmediatePriority(5), WithConsumers(func(string, map[string]any) Result {
+	q := New(WithStorage(storage), WithRunImmediatePriority(5), withConsumerFuncs(func(Task) Result {
 		return Requeue(0)
 	}))
 
@@ -71,7 +71,7 @@ func TestConsume_Requeue(t *testing.T) {
 func TestConsume_Error_Requeues(t *testing.T) {
 
 	storage := &mockStorage{}
-	q := New(WithStorage(storage), WithConsumers(func(string, map[string]any) Result {
+	q := New(WithStorage(storage), withConsumerFuncs(func(Task) Result {
 		return Error(errors.New("temporary"))
 	}))
 
@@ -86,7 +86,7 @@ func TestConsume_Error_Requeues(t *testing.T) {
 func TestConsume_Error_ExhaustedRetriesFails(t *testing.T) {
 
 	storage := &mockStorage{}
-	q := New(WithStorage(storage), WithConsumers(func(string, map[string]any) Result {
+	q := New(WithStorage(storage), withConsumerFuncs(func(Task) Result {
 		return Error(errors.New("still failing"))
 	}))
 
@@ -101,7 +101,7 @@ func TestConsume_Error_ExhaustedRetriesFails(t *testing.T) {
 func TestConsume_Failure(t *testing.T) {
 
 	storage := &mockStorage{}
-	q := New(WithStorage(storage), WithConsumers(func(string, map[string]any) Result {
+	q := New(WithStorage(storage), withConsumerFuncs(func(Task) Result {
 		return Failure(errors.New("permanent"))
 	}))
 
@@ -120,7 +120,7 @@ func TestOnTaskSucceeded_NoStorage(t *testing.T) {
 
 func TestOnTaskSucceeded_StorageError(t *testing.T) {
 	storage := &mockStorage{deleteErr: errors.New("db down")}
-	q := New(WithStorage(storage), WithConsumers(func(string, map[string]any) Result {
+	q := New(WithStorage(storage), withConsumerFuncs(func(Task) Result {
 		return Success()
 	}))
 
@@ -130,7 +130,7 @@ func TestOnTaskSucceeded_StorageError(t *testing.T) {
 
 func TestOnTaskError_NoStorageUsesBuffer(t *testing.T) {
 
-	q := New(WithConsumers(func(string, map[string]any) Result {
+	q := New(withConsumerFuncs(func(Task) Result {
 		return Error(errors.New("temporary"))
 	}))
 
@@ -141,7 +141,7 @@ func TestOnTaskError_NoStorageUsesBuffer(t *testing.T) {
 
 func TestOnTaskFailure_NoStorage(t *testing.T) {
 
-	q := New(WithConsumers(func(string, map[string]any) Result {
+	q := New(withConsumerFuncs(func(Task) Result {
 		return Failure(errors.New("permanent"))
 	}))
 
@@ -152,7 +152,7 @@ func TestOnTaskFailure_NoStorage(t *testing.T) {
 func TestOnTaskFailure_LogError(t *testing.T) {
 
 	storage := &mockStorage{logErr: errors.New("log unavailable")}
-	q := New(WithStorage(storage), WithConsumers(func(string, map[string]any) Result {
+	q := New(WithStorage(storage), withConsumerFuncs(func(Task) Result {
 		return Failure(errors.New("permanent"))
 	}))
 

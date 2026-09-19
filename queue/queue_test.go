@@ -8,11 +8,11 @@ import (
 
 func TestQueue(t *testing.T) {
 
-	consumer := func(_ string, _ map[string]any) Result {
+	consumer := func(Task) Result {
 		return Success()
 	}
 
-	q := New(WithConsumers(consumer))
+	q := New(withConsumerFuncs(consumer))
 
 	// Start the workers so they drain the buffer. Without this, publishing more
 	// than bufferSize tasks to a nil-storage queue deadlocks on a full channel.
