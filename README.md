@@ -83,6 +83,9 @@ of attempts that have already failed.  `task.IsFinalAttempt()` reports whether a
 will abandon the task — though a consumer that only cares about giving up should use
 `OnFailure`, which the queue calls for it.
 
+Only failures reach `derp.Report`: a `queue.Failure(err)`, or a `queue.Error(err)` whose retries
+have run out, is reported once.  Retries are logged at debug level and not reported.
+
 It is the consumer's job to identify the task by name, and decide if it can
 execute it or not.  You can configure any number of consumers, so if
 a task is not recognized (the consumer returns `queue.Ignored()`), it is passed

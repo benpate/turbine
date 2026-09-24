@@ -91,16 +91,18 @@ func (q *Queue) onTaskFailure(consumer Consumer, task Task, err error) error {
 	const location = "queue.onTaskFailure"
 	log.Trace().Str("location", location).Str("name", task.Name).Msg("Logging task failure...")
 
+	// RULE: This is the ONE place a task's own error is reported: a Failure, or an Error whose
+	// retries have run out.  Retries themselves are never reported.
+	derp.Report(err)
+
 	// Record the error on a separate value, so the hook below still sees the attempt as it ran
 	failed := task
 	failed.Error = derp.Message(err)
 
-	// Move the task to the error log and off the queue.  A memory-only Queue has no error log,
-	// so it reports the error here instead -- the Consumer is still told either way.
+	// Move the task to the error log and off the queue.  A memory-only Queue has no error log.
 	if q.storage == nil {
 
 		log.Trace().Str("location", location).Msg("Storage is nil.  Unable to log failure.")
-		derp.Report(err)
 
 	} else {
 

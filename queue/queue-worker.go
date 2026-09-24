@@ -96,8 +96,8 @@ func (q *Queue) consume(task Task) error {
 	// If the Task fails but can be retried, then try to re-queue for another attempt
 	case ResultStatusError:
 
-		log.Trace().Str("location", location).Msg("Task error...")
-		derp.Report(result.Error)
+		// RULE: A retry is not reported.  onTaskFailure reports once, if the retries run out.
+		log.Debug().Str("location", location).Str("name", task.Name).Err(result.Error).Msg("Task error. Retrying.")
 
 		// onTaskError decides retry-vs-abandon and tells the Consumer which one it chose.
 		if err := q.onTaskError(consumer, task, result.Error); err != nil {
@@ -108,7 +108,6 @@ func (q *Queue) consume(task Task) error {
 	case ResultStatusFailure:
 
 		log.Trace().Str("location", location).Msg("Task failure...")
-		derp.Report(result.Error)
 
 		if err := q.onTaskFailure(consumer, task, result.Error); err != nil {
 			return derp.Wrap(err, location, "Setting task failure", result.Error)
