@@ -1,7 +1,9 @@
 package queue
 
 import (
+	"encoding/json"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/benpate/derp"
@@ -76,4 +78,30 @@ func TestReporting_FailureWithoutStorageIsReportedOnce(t *testing.T) {
 
 	require.NoError(t, q.consume(Task{TaskID: "abc", Name: "x"}))
 	require.Len(t, *reported, 1)
+}
+
+// TestReporting_UnrecognizedTaskIsReportedOnce confirms that a task no Consumer recognizes is
+// reported once, by name, and never with its Arguments (BUG-213)
+func TestReporting_UnrecognizedTaskIsReportedOnce(t *testing.T) {
+
+	const marker = "s3cretTaskArgument"
+
+	reported := recordReports(t)
+	ignoreConsumer := func(Task) Result { return Ignored() }
+	q := New(WithStorage(&mockStorage{}), withConsumerFuncs(ignoreConsumer))
+
+	task := Task{TaskID: "abc", Name: "RetiredTaskName", Arguments: map[string]any{"secret": marker}, Signature: marker}
+	require.NoError(t, q.consume(task))
+	require.Len(t, *reported, 1)
+
+	// The report names the task...
+	err := (*reported)[0]
+	serialized, marshalErr := json.Marshal(err)
+	require.NoError(t, marshalErr)
+	require.Contains(t, string(serialized), "RetiredTaskName")
+
+	// ...and never carries it, in any form a reporter might store
+	require.NotContains(t, string(serialized), marker)
+	require.NotContains(t, err.Error(), marker)
+	require.NotContains(t, fmt.Sprintf("%+v", err), marker)
 }

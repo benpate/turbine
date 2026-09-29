@@ -266,3 +266,48 @@ func TestIntegration_SignatureStillBlocksOtherTasks(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, int64(1), count)
 }
+
+// ignoringConsumer recognizes no Task, as a Consumer does after the task's name is retired
+type ignoringConsumer struct{}
+
+// OnPublish implements queue.Consumer
+func (ignoringConsumer) OnPublish(*queue.Task) error { return nil }
+
+// Run implements queue.Consumer, ignoring every Task
+func (ignoringConsumer) Run(queue.Task) queue.Result { return queue.Ignored() }
+
+// OnSuccess implements queue.Consumer
+func (ignoringConsumer) OnSuccess(queue.Task) error { return nil }
+
+// OnError implements queue.Consumer
+func (ignoringConsumer) OnError(queue.Task, error) error { return nil }
+
+// OnFailure implements queue.Consumer
+func (ignoringConsumer) OnFailure(queue.Task, error) error { return nil }
+
+// TestIntegration_UnrecognizedTaskFailsAtOnce confirms that a stored task no Consumer recognizes
+// leaves the queue for the failure log on its first claim, instead of being locked and
+// claimed again every time its lock expires (BUG-213)
+func TestIntegration_UnrecognizedTaskFailsAtOnce(t *testing.T) {
+
+	storage := testStorage(t, 16, 5)
+
+	task := queue.NewTask("RetiredTaskName", map[string]any{"key": "value"})
+	task.StartDate = time.Now().Add(-time.Minute).Unix()
+	task.RetryMax = 8
+	require.NoError(t, storage.SaveTask(task))
+
+	q := queue.New(queue.WithStorage(storage), queue.WithPollStorage(true), queue.WithConsumers(ignoringConsumer{}))
+	q.Start()
+	t.Cleanup(q.Stop)
+
+	countIn := func(collection string) int64 {
+		count, err := storage.database.Collection(collection).CountDocuments(context.Background(), bson.M{"name": "RetiredTaskName"})
+		require.NoError(t, err)
+		return count
+	}
+
+	// The first poll claims the task.  Afterward it must be gone from the queue and in the failure log
+	require.Eventually(t, func() bool { return countIn(CollectionQueue) == 0 }, 10*time.Second, 50*time.Millisecond, "the unrecognized task must leave the queue")
+	require.Equal(t, int64(1), countIn(CollectionLog))
+}

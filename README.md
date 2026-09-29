@@ -89,8 +89,9 @@ have run out, is reported once.  Retries are logged at debug level and not repor
 It is the consumer's job to identify the task by name, and decide if it can
 execute it or not.  You can configure any number of consumers, so if
 a task is not recognized (the consumer returns `queue.Ignored()`), it is passed
-to the next consumer until a match is found.  Only the consumer that handled the task
-hears about how it turned out.
+to the next consumer until a match is found.  If no consumer recognizes it, the task
+fails at once: it is reported, written to the error log, and removed from the queue.
+Only the consumer that handled the task hears about how it turned out.
 
 If the consumer DOES recognize the Task, then it executes the job and returns one
 of the `queue.Result` constructors:

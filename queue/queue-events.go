@@ -117,7 +117,8 @@ func (q *Queue) onTaskFailure(consumer Consumer, task Task, err error) error {
 	}
 
 	// RULE: The Consumer is told only once the queue has recorded the outcome, so a hook that
-	// reads storage sees the task already gone.
+	// reads storage sees the task already gone.  A nil Consumer is the panic path, or a task
+	// that no Consumer recognized: either way there is nobody to tell.
 	if consumer != nil {
 		// The inner `err` is the hook's own failure, not the Task's -- see onTaskError.
 		if err := consumer.OnFailure(task, err); err != nil {

@@ -69,8 +69,11 @@ func (q *Queue) consume(task Task) error {
 	// Dispatch the task to the consumers until one matches or all have been tried.
 	consumer, result, consumed := q.dispatch(task)
 
+	// RULE: A task that no Consumer recognizes fails at once, and is reported once.  Returning
+	// without closing it left a stored task locked until its timeout, then claimed again forever.
+	// The error names the task and never carries it, because its Arguments may hold anything (BUG-213).
 	if !consumed {
-		return derp.Internal(location, "No consumers available to process task", task)
+		return q.onTaskFailure(nil, task, derp.Internal(location, "No consumer recognizes this task", task.Name, task.TaskID))
 	}
 
 	switch result.Status {

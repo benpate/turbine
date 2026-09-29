@@ -22,9 +22,14 @@ func TestConsume_Success(t *testing.T) {
 
 func TestConsume_NoConsumers(t *testing.T) {
 
-	q := New()
-	err := q.consume(Task{Name: "x"})
-	require.Error(t, err) // "No consumers available to process task"
+	storage := &mockStorage{}
+	q := New(WithStorage(storage))
+
+	// With no consumers at all, the task fails at once: logged, and removed from the queue
+	require.NoError(t, q.consume(Task{TaskID: "abc", Name: "x"}))
+	require.Len(t, storage.failures, 1)
+	require.Equal(t, []string{"abc"}, storage.deleted)
+	require.Empty(t, storage.saved, "an unrecognized task must never be re-queued")
 }
 
 func TestConsume_Ignored_TriesNextConsumer(t *testing.T) {
@@ -42,11 +47,16 @@ func TestConsume_Ignored_TriesNextConsumer(t *testing.T) {
 
 func TestConsume_AllIgnored(t *testing.T) {
 
+	storage := &mockStorage{}
 	ignoreConsumer := func(Task) Result { return Ignored() }
-	q := New(withConsumerFuncs(ignoreConsumer, ignoreConsumer))
+	q := New(WithStorage(storage), withConsumerFuncs(ignoreConsumer, ignoreConsumer))
 
-	// If every consumer ignores the task, consume returns an error
-	require.Error(t, q.consume(Task{Name: "x"}))
+	// If every consumer ignores the task, it fails at once: logged, and removed from the queue
+	require.NoError(t, q.consume(Task{TaskID: "abc", Name: "x", RetryMax: 8}))
+	require.Len(t, storage.failures, 1)
+	require.Equal(t, "x", storage.failures[0].Name)
+	require.Equal(t, []string{"abc"}, storage.deleted)
+	require.Empty(t, storage.saved, "an unrecognized task must never be re-queued")
 }
 
 func TestConsume_Requeue(t *testing.T) {
