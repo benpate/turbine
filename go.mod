@@ -4,7 +4,7 @@ go 1.25.0
 
 require (
 	github.com/benpate/derp v0.39.0
-	github.com/benpate/rosetta v0.35.0
+	github.com/benpate/rosetta v0.40.0
 	github.com/rs/zerolog v1.35.1
 	github.com/stretchr/testify v1.12.1
 	go.mongodb.org/mongo-driver v1.17.9
