@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/benpate/derp"
+	"github.com/benpate/derp/plugins"
 	"github.com/stretchr/testify/require"
 )
 
@@ -20,14 +21,14 @@ func (reporter recordingReporter) Report(err error) {
 	*reporter.reported = append(*reporter.reported, err)
 }
 
-// recordReports swaps derp's reporters for one that records, and restores them when the test ends
+// recordReports swaps derp's reporters for one that records, and restores derp's default when the test ends
 func recordReports(t *testing.T) *[]error {
 
 	reported := make([]error, 0)
-	original := derp.Plugins
 
-	derp.Plugins = derp.ReporterList{recordingReporter{reported: &reported}}
-	t.Cleanup(func() { derp.Plugins = original })
+	// derp.Plugins holds a mutex and cannot be copied, so restore derp's default reporter instead
+	derp.SetPlugins(recordingReporter{reported: &reported})
+	t.Cleanup(func() { derp.SetPlugins(plugins.JSON{}) })
 
 	return &reported
 }
