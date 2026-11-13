@@ -78,3 +78,11 @@ func TestNewTask_MultipleOptions(t *testing.T) {
 	require.Equal(t, 4, task.RetryMax)
 	require.Equal(t, "sig", task.Signature)
 }
+
+func TestWithBackoffMax(t *testing.T) {
+	task := NewTask("x", nil, WithBackoffMax(24*time.Hour))
+	require.Equal(t, int64(86400), task.BackoffMax)
+
+	// A task that sets no cap keeps the doubling schedule
+	require.Zero(t, NewTask("x", nil).BackoffMax)
+}

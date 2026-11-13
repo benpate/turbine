@@ -3,6 +3,7 @@ package queue
 import (
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -190,4 +191,39 @@ func TestOnTaskFailure_LogError(t *testing.T) {
 	}))
 
 	require.Error(t, q.consume(Task{TaskID: "abc", Name: "x"}))
+}
+
+// TestConsume_Error_HonorsBackoffMax confirms that a retry is scheduled no later than the task's cap,
+// and that the cap survives onto the next attempt
+func TestConsume_Error_HonorsBackoffMax(t *testing.T) {
+
+	storage := &mockStorage{}
+	q := New(WithStorage(storage), withConsumerFuncs(func(Task) Result {
+		return Error(errors.New("temporary"))
+	}))
+
+	// Uncapped, the twelfth retry would wait 2048 minutes
+	before := time.Now()
+	require.NoError(t, q.consume(Task{TaskID: "abc", Name: "x", RetryCount: 11, RetryMax: 17, BackoffMax: 3600}))
+
+	require.Len(t, storage.saved, 1)
+	require.Equal(t, int64(3600), storage.saved[0].BackoffMax)
+	require.Equal(t, 12, storage.saved[0].RetryCount)
+	require.InDelta(t, before.Add(time.Hour).Unix(), storage.saved[0].StartDate, 2)
+}
+
+// TestConsume_Requeue_KeepsBackoffMax confirms that a requeued task keeps its retry schedule
+func TestConsume_Requeue_KeepsBackoffMax(t *testing.T) {
+
+	storage := &mockStorage{}
+	q := New(WithStorage(storage), WithRunImmediatePriority(5), withConsumerFuncs(func(Task) Result {
+		return Requeue(time.Minute)
+	}))
+
+	require.NoError(t, q.consume(Task{TaskID: "abc", Name: "x", Priority: 99, RetryCount: 4, RetryMax: 17, BackoffMax: 86400}))
+
+	require.Len(t, storage.saved, 1)
+	require.Equal(t, int64(86400), storage.saved[0].BackoffMax)
+	require.Equal(t, 17, storage.saved[0].RetryMax)
+	require.Zero(t, storage.saved[0].RetryCount, "a requeue does not consume a retry")
 }

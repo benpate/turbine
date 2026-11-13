@@ -52,7 +52,7 @@ func (q *Queue) onTaskError(consumer Consumer, task Task, err error) error {
 	// for the next run instead of the one that just happened.
 	retry := task
 	retry.LockID = ""
-	retry.StartDate = time.Now().Add(backoff(task.RetryCount)).Unix()
+	retry.StartDate = time.Now().Add(retryDelay(task)).Unix()
 	retry.TimeoutDate = 0
 	retry.RetryCount = task.RetryCount + 1
 	retry.Error = derp.Serialize(err)

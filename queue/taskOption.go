@@ -51,6 +51,14 @@ func WithRetryMax(retryMax int) TaskOption {
 	}
 }
 
+// WithBackoffMax caps the wait between retries.  The wait still doubles after each failure,
+// but never exceeds this duration, so a task can keep retrying at a steady interval.
+func WithBackoffMax(backoffMax time.Duration) TaskOption {
+	return func(t *Task) {
+		t.BackoffMax = int64(backoffMax / time.Second)
+	}
+}
+
 // WithSignature sets the task's signature.  Only one task per signature may be active at a
 // time, and duplicates are dropped silently.
 func WithSignature(signature string) TaskOption {

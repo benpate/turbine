@@ -60,3 +60,45 @@ func TestBackoff_NegativeRetryCountDoesNotPanic(t *testing.T) {
 		require.Equal(t, 1*time.Minute, backoff(retryCount), "retryCount=%d", retryCount)
 	}
 }
+
+// TestRetryDelay_Uncapped confirms that a task with no BackoffMax keeps the doubling schedule
+func TestRetryDelay_Uncapped(t *testing.T) {
+
+	for _, retryCount := range []int{0, 1, 7, 11, 20} {
+		require.Equal(t, backoff(retryCount), retryDelay(Task{RetryCount: retryCount}), "retryCount=%d", retryCount)
+	}
+
+	// A negative cap is a corrupt record, and must not turn every wait into zero
+	require.Equal(t, backoff(3), retryDelay(Task{RetryCount: 3, BackoffMax: -60}))
+}
+
+// TestRetryDelay_Capped confirms that the wait doubles up to BackoffMax and then stays there
+func TestRetryDelay_Capped(t *testing.T) {
+
+	day := int64((24 * time.Hour) / time.Second)
+
+	test := func(retryCount int, expected time.Duration) {
+		require.Equal(t, expected, retryDelay(Task{RetryCount: retryCount, BackoffMax: day}), "retryCount=%d", retryCount)
+	}
+
+	test(0, time.Minute)
+	test(10, 1024*time.Minute)
+	test(11, 24*time.Hour)
+	test(16, 24*time.Hour)
+	test(1000, 24*time.Hour)
+}
+
+// TestRetryDelay_SevenDaySchedule pins the delivery schedule that the cap exists for: a task
+// with seventeen retries and a one-day cap is still retrying after seven days
+func TestRetryDelay_SevenDaySchedule(t *testing.T) {
+
+	task := Task{RetryMax: 17, BackoffMax: int64((24 * time.Hour) / time.Second)}
+	total := time.Duration(0)
+
+	for task.RetryCount = 0; task.RetryCount < task.RetryMax; task.RetryCount++ {
+		total += retryDelay(task)
+	}
+
+	require.GreaterOrEqual(t, total, 7*24*time.Hour)
+	require.Less(t, total, 8*24*time.Hour)
+}

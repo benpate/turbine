@@ -17,3 +17,17 @@ func backoff(retryCount int) time.Duration {
 
 	return time.Duration(1<<exponent) * time.Minute
 }
+
+// retryDelay returns how long a failed task waits before its next attempt: the exponential
+// backoff for its retry count, capped at the task's BackoffMax when it has one
+func retryDelay(task Task) time.Duration {
+
+	delay := backoff(task.RetryCount)
+
+	// RULE: Zero means "no cap".  A negative value is a corrupt record, and is treated the same way.
+	if task.BackoffMax <= 0 {
+		return delay
+	}
+
+	return min(delay, time.Duration(task.BackoffMax)*time.Second)
+}
