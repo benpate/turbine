@@ -22,6 +22,8 @@ type Queue struct {
 	preProcessor         PreProcessor   // optional pre-processor function that is executed on all tasks before they are published
 	buffer               chan Task      // buffer is a channel of tasks that are ready to be processed
 	done                 chan struct{}  // done channel is closed to signal all workers to stop
+	wake                 chan struct{}  // wake holds at most one request for the storage poller to poll now
+	pollInterval         time.Duration  // pollInterval is the longest that the storage poller waits between polls
 	stopOnce             sync.Once      // stopOnce guarantees the done channel is closed only once, making Stop idempotent
 	workers              sync.WaitGroup // workers tracks the running worker goroutines so Stop can wait for them to exit
 }
@@ -38,6 +40,8 @@ func New(options ...Option) *Queue {
 		defaultRetryMax:      8, // backoff sums 2^0..2^7 => 255 minutes (~4.25 hours) of retries
 		pollStorage:          true,
 		done:                 make(chan struct{}),
+		wake:                 make(chan struct{}, 1),
+		pollInterval:         time.Minute,
 	}
 
 	// Apply options
@@ -97,14 +101,23 @@ func (q *Queue) start() {
 		if err != nil {
 			// Pause before retrying so a failing storage backend doesn't hot-spin this loop.
 			derp.Report(derp.Wrap(err, location, "Unable to get tasks from storage"))
-			time.Sleep(1 * time.Minute)
+
+			if !q.waitForWork() {
+				return
+			}
+
 			continue
 		}
 
-		// If there are no tasks, wait one minute before trying to lock more.
+		// If there are no tasks, wait for the next poll before trying to lock more.
 		if len(tasks) == 0 {
-			log.Trace().Msg("Turbine Queue: no tasks found.  Waiting 1 minute.")
-			time.Sleep(1 * time.Minute)
+			log.Trace().Msg("Turbine Queue: no tasks found.  Waiting for the next poll.")
+
+			if !q.waitForWork() {
+				return
+			}
+
+			continue
 		}
 
 		// Hand each task to a worker, selecting on q.done as well: a bare send would park this
@@ -120,6 +133,29 @@ func (q *Queue) start() {
 				return
 			}
 		}
+	}
+}
+
+// waitForWork blocks until the poll interval passes or a stored Task asks for a poll, and
+// returns FALSE if the Queue stopped first
+func (q *Queue) waitForWork() bool {
+
+	timer := time.NewTimer(q.pollInterval)
+	defer timer.Stop()
+
+	select {
+
+	// The regular poll, which also finds Tasks that other servers stored
+	case <-timer.C:
+		return true
+
+	// A Task that is due now was just written to storage
+	case <-q.wake:
+		return true
+
+	case <-q.done:
+		log.Trace().Msg("Turbine Queue: stopped")
+		return false
 	}
 }
 
@@ -210,6 +246,9 @@ func (q *Queue) Publish(task Task) error {
 		return derp.Wrap(err, location, "Unable to save task to database")
 	}
 
+	// A stored Task waits for the poller, so ask for a poll now
+	q.kick(task)
+
 	// Success! (probably)
 	return nil
 }
@@ -237,6 +276,9 @@ func (q *Queue) Schedule(task Task, delay time.Duration) error {
 	if err := q.storage.SaveTask(task); err != nil {
 		return derp.Wrap(err, location, "Unable to save task to database")
 	}
+
+	// A Task scheduled with no delay is due now, so ask for a poll
+	q.kick(task)
 
 	return nil
 }
@@ -313,4 +355,22 @@ func (q *Queue) allowImmediate(task *Task) bool {
 
 	// Otherwise, tasks can execute immediately if their priority is less than or equal to the runImmediatePriority
 	return task.Priority <= q.runImmediatePriority
+}
+
+// kick asks the storage poller to poll now, for a Task that was just written to storage.
+// It never blocks, and it does nothing for a Task that is not due yet.
+func (q *Queue) kick(task Task) {
+
+	// RULE: A Task that starts later would not be found, so the poller is left to its own schedule
+	if task.StartDate > time.Now().Unix() {
+		return
+	}
+
+	// RULE: The channel holds one request. A second one adds nothing, because the poll that
+	// answers the first also finds every Task stored before it runs.
+	select {
+	case q.wake <- struct{}{}:
+	default:
+		// A poll is already requested
+	}
 }
